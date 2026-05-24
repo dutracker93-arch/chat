@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ARCADE HUB</title>
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;900&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
@@ -16,17 +18,15 @@
     --scanline-gap: 4px;
   }
 
-  * { margin:0; padding:0; box-sizing:border-box; border-radius:0 !important; }
+  * { margin:0; padding:0; box-sizing:border-box; border-radius:0 !important; font-family: 'Pixelify Sans', sans-serif; }
 
   body {
     background: #080808;
     color: var(--cream);
-    font-family: 'Montserrat', sans-serif;
     min-height: 100vh;
     overflow: hidden;
   }
 
-  /* CRT scanlines */
   body::before {
     content:'';
     position:fixed;
@@ -36,15 +36,8 @@
     z-index:9999;
   }
 
-  /* ── ARCADE BG ── */
-  .arcade-bg {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    overflow: hidden;
-  }
+  .arcade-bg { position:fixed; inset:0; z-index:0; overflow:hidden; }
 
-  /* grid floor */
   .arcade-bg::before {
     content:'';
     position:absolute;
@@ -55,305 +48,185 @@
       #080808;
   }
 
-  /* perspective grid lines at bottom */
   .grid-floor {
     position:absolute;
-    bottom:0; left:0; right:0;
-    height:55%;
+    bottom:0; left:0; right:0; height:55%;
     background:
-      repeating-linear-gradient(
-        90deg,
-        transparent 0%,
-        transparent calc(5% - 1px),
-        rgba(28,69,60,0.25) 5%
-      ),
-      repeating-linear-gradient(
-        180deg,
-        transparent 0%,
-        transparent calc(8% - 1px),
-        rgba(28,69,60,0.18) 8%
-      );
+      repeating-linear-gradient(90deg, transparent 0%, transparent calc(5% - 1px), rgba(28,69,60,0.25) 5%),
+      repeating-linear-gradient(180deg, transparent 0%, transparent calc(8% - 1px), rgba(28,69,60,0.18) 8%);
     transform: perspective(400px) rotateX(35deg);
     transform-origin: bottom center;
     opacity: 0.6;
   }
 
-  /* floating pixel shapes */
-  .pixel {
-    position:absolute;
-    background: var(--green);
-    opacity: 0.12;
-    animation: floatPixel linear infinite;
-  }
+  .pixel { position:absolute; background:var(--green); opacity:0.12; animation:floatPixel linear infinite; }
   .pixel:nth-child(1)  { width:8px;  height:8px;  top:15%; left:8%;   animation-duration:18s; animation-delay:-2s; }
-  .pixel:nth-child(2)  { width:4px;  height:4px;  top:40%; left:20%;  animation-duration:22s; animation-delay:-7s; background:var(--rust); opacity:0.15; }
+  .pixel:nth-child(2)  { width:4px;  height:4px;  top:40%; left:20%;  animation-duration:22s; animation-delay:-7s;  background:var(--rust); opacity:0.15; }
   .pixel:nth-child(3)  { width:12px; height:4px;  top:60%; left:5%;   animation-duration:15s; animation-delay:-3s; }
   .pixel:nth-child(4)  { width:6px;  height:6px;  top:25%; left:75%;  animation-duration:20s; animation-delay:-10s; background:var(--rust); opacity:0.1; }
   .pixel:nth-child(5)  { width:4px;  height:12px; top:70%; left:85%;  animation-duration:17s; animation-delay:-5s; }
   .pixel:nth-child(6)  { width:8px;  height:8px;  top:10%; left:50%;  animation-duration:25s; animation-delay:-12s; background:var(--rust); opacity:0.08; }
   .pixel:nth-child(7)  { width:4px;  height:4px;  top:80%; left:40%;  animation-duration:19s; animation-delay:-8s; }
-  .pixel:nth-child(8)  { width:10px; height:4px;  top:35%; left:90%;  animation-duration:23s; animation-delay:-1s; background:var(--rust); opacity:0.12; }
+  .pixel:nth-child(8)  { width:10px; height:4px;  top:35%; left:90%;  animation-duration:23s; animation-delay:-1s;  background:var(--rust); opacity:0.12; }
 
   @keyframes floatPixel {
-    0%   { transform: translateY(0) rotate(0deg); opacity:0.12; }
-    50%  { opacity: 0.2; }
-    100% { transform: translateY(-80px) rotate(180deg); opacity:0; }
+    0%   { transform:translateY(0) rotate(0deg); opacity:0.12; }
+    50%  { opacity:0.2; }
+    100% { transform:translateY(-80px) rotate(180deg); opacity:0; }
   }
 
-  /* ── LAYOUT ── */
-  .page {
-    position: relative;
-    z-index: 10;
-    width: 100%;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
+  .page { position:relative; z-index:10; width:100%; min-height:100vh; display:flex; flex-direction:column; }
 
-  /* top logo bar */
   .top-bar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 22px 0 18px;
-    border-bottom: 2px solid var(--rust);
-    background: rgba(8,8,8,0.85);
-    position: relative;
+    display:flex; align-items:center; justify-content:center;
+    padding:18px 0 14px;
+    border-bottom:2px solid var(--rust);
+    background:rgba(8,8,8,0.85);
   }
 
   .logo {
-    font-weight: 900;
-    font-size: 2rem;
-    letter-spacing: 0.25em;
-    color: var(--cream);
-    text-shadow: 0 0 10px var(--rust-bright), 3px 3px 0 var(--rust);
+    font-size:2.4rem;
+    font-weight:700;
+    letter-spacing:0.05em;
+    color:var(--cream);
+    text-shadow:0 0 10px var(--rust-bright), 3px 3px 0 var(--rust);
   }
-  .logo span { color: var(--rust-bright); }
+  .logo span { color:var(--rust-bright); }
 
-  /* center login panel */
   .center {
-    flex:1;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding: 30px 20px 60px;
+    flex:1; display:flex; align-items:center; justify-content:center;
+    padding:20px 20px 55px;
+    overflow-y:auto;
   }
 
   .panel {
-    width: 100%;
-    max-width: 420px;
-    background: rgba(10,10,10,0.92);
-    border: 1px solid var(--rust);
-    box-shadow: 0 0 0 1px rgba(28,69,60,0.4), inset 0 0 40px rgba(28,69,60,0.05), 0 20px 60px rgba(0,0,0,0.7);
-    padding: 36px 32px 32px;
-    position: relative;
+    width:100%; max-width:420px;
+    background:rgba(10,10,10,0.92);
+    border:1px solid var(--rust);
+    box-shadow:0 0 0 1px rgba(28,69,60,0.4), inset 0 0 40px rgba(28,69,60,0.05), 0 20px 60px rgba(0,0,0,0.7);
+    padding:30px 28px 28px;
+    position:relative;
   }
 
-  /* panel corner brackets */
   .panel::before, .panel::after {
-    content:'';
-    position:absolute;
-    width:16px; height:16px;
-    border-color: var(--green-bright);
-    border-style: solid;
-    opacity:0.7;
+    content:''; position:absolute; width:16px; height:16px;
+    border-color:var(--green-bright); border-style:solid; opacity:0.7;
   }
   .panel::before { top:-1px; left:-1px; border-width:2px 0 0 2px; }
   .panel::after  { bottom:-1px; right:-1px; border-width:0 2px 2px 0; }
 
-  /* tab switcher */
   .tabs {
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    border: 1px solid var(--rust);
-    margin-bottom: 28px;
+    display:grid; grid-template-columns:1fr 1fr;
+    border:1px solid var(--rust);
+    margin-bottom:24px;
   }
 
   .tab-btn {
-    background: transparent;
-    border: none;
-    color: rgba(232,213,176,0.6);
-    font-family: 'Montserrat', sans-serif;
-    font-weight: 600;
-    font-size: 0.85rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    padding: 12px;
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    background:transparent; border:none;
+    color:rgba(232,213,176,0.6);
+    font-size:1.05rem;
+    text-transform:uppercase;
+    padding:12px; cursor:pointer;
+    transition:background 0.15s, color 0.15s;
   }
+  .tab-btn:first-child { border-right:1px solid var(--rust); }
+  .tab-btn.active { background:var(--rust); color:var(--cream); font-weight:700; }
 
-  .tab-btn:first-child { border-right: 1px solid var(--rust); }
+  .field-group { display:flex; flex-direction:column; gap:14px; margin-bottom:20px; }
 
-  .tab-btn.active {
-    background: var(--rust);
-    color: var(--cream);
-  }
+  .field { position:relative; }
 
-  /* fields */
-  .field-group {
-    display:flex;
-    flex-direction:column;
-    gap:16px;
-    margin-bottom: 24px;
-  }
-
-  .field {
-    position:relative;
-  }
-
-  .field input {
-    width:100%;
-    background: rgba(28,69,60,0.08);
-    border: 1px solid rgba(116,66,52,0.5);
-    color: var(--cream);
-    font-family: 'Montserrat', sans-serif;
-    font-size: 0.9rem;
-    padding: 12px 14px;
-    outline: none;
-    transition: border-color 0.15s, background 0.15s;
-  }
-
-  .field input::placeholder { color: rgba(232,213,176,0.3); }
-
-  .field input:focus {
-    border-color: var(--green-bright);
-    background: rgba(28,69,60,0.15);
-  }
-
-  .field .eye {
-    position:absolute;
-    right:12px; top:50%;
-    transform:translateY(-50%);
-    background:none; border:none;
-    color:rgba(232,213,176,0.5);
-    cursor:pointer; font-size:0.75rem;
-    font-family: 'Montserrat', sans-serif;
-    font-weight: 600;
-    padding:0;
-    transition: color 0.1s;
-  }
-  .field .eye:hover { color: var(--cream); }
-
-  /* label above */
   .field-label {
-    font-size:0.75rem;
-    font-weight: 600;
-    letter-spacing:0.1em;
+    font-size:0.9rem;
     color:rgba(232,213,176,0.7);
     text-transform:uppercase;
     margin-bottom:6px;
   }
 
-  /* submit btn */
-  .submit-btn {
+  .field input {
     width:100%;
-    background: var(--rust);
-    border: none;
-    color: var(--cream);
-    font-family: 'Montserrat', sans-serif;
-    font-weight: 900;
-    font-size: 0.9rem;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    padding: 15px;
-    cursor: pointer;
-    position: relative;
-    overflow: hidden;
-    transition: background 0.15s;
-    margin-bottom: 14px;
+    background:rgba(28,69,60,0.08);
+    border:1px solid rgba(116,66,52,0.5);
+    color:var(--cream);
+    font-size:0.95rem;
+    padding:11px 44px 11px 14px;
+    outline:none;
+    transition:border-color 0.15s, background 0.15s;
+  }
+  .field input::placeholder { color:rgba(232,213,176,0.3); }
+  .field input:focus { border-color:var(--green-bright); background:rgba(28,69,60,0.15); }
+
+  .field .eye {
+    position:absolute; right:12px; top:50%; transform:translateY(-50%);
+    background:none; border:none; color:rgba(232,213,176,0.5);
+    cursor:pointer; font-size:0.85rem; padding:0;
+    transition:color 0.1s;
+  }
+  .field .eye:hover { color:var(--cream); }
+
+  .field input[type="date"] { color-scheme:dark; padding-right:14px; }
+
+  .gender-row {
+    display:grid; grid-template-columns:1fr 1fr 1fr;
+    border:1px solid rgba(116,66,52,0.5);
   }
 
-  .submit-btn:hover {
-    background: var(--green);
+  .gender-btn {
+    background:rgba(28,69,60,0.08); border:none;
+    border-right:1px solid rgba(116,66,52,0.4);
+    color:rgba(232,213,176,0.4);
+    font-size:0.9rem; text-transform:uppercase;
+    padding:11px 6px; cursor:pointer;
+    transition:background 0.15s, color 0.15s;
   }
+  .gender-btn:last-child { border-right:none; }
+  .gender-btn.active { background:var(--rust); color:var(--cream); font-weight:700; }
 
-  /* terms */
-  .terms-row {
-    display:flex;
-    align-items:center;
-    gap:10px;
-    margin-bottom:18px;
+  .submit-btn {
+    width:100%; background:var(--rust); border:none;
+    color:var(--cream); font-size:1.2rem; font-weight:700;
+    text-transform:uppercase; padding:14px; cursor:pointer;
+    transition:background 0.15s; margin-bottom:12px;
   }
+  .submit-btn:hover { background:var(--green); }
+  .submit-btn:disabled { opacity:0.5; cursor:not-allowed; background:var(--rust); }
 
-  .terms-row input[type=checkbox] {
-    width:16px; height:16px;
-    accent-color: var(--rust);
-    cursor:pointer;
-    flex-shrink:0;
-  }
+  .terms-row { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+  .terms-row input[type=checkbox] { width:15px; height:15px; accent-color:var(--rust); cursor:pointer; flex-shrink:0; }
+  .terms-row label { font-size:0.78rem; color:rgba(232,213,176,0.6); cursor:pointer; }
+  .terms-row label a { color:var(--rust-bright); text-decoration:none; font-weight:700; }
 
-  .terms-row label {
-    font-size:0.75rem;
-    color:rgba(232,213,176,0.7);
-    cursor:pointer;
-  }
-
-  .terms-row label a {
-    color: var(--rust-bright);
-    text-decoration:none;
-    font-weight: 600;
-  }
-
-  /* status bar */
   .status-bar {
-    position:fixed;
-    bottom:0; left:0; right:0;
+    position:fixed; bottom:0; left:0; right:0;
     background:rgba(28,69,60,0.95);
     border-top:1px solid var(--rust);
-    display:flex;
-    align-items:center;
-    padding:8px 18px;
-    font-size:0.7rem;
-    font-weight: 600;
-    letter-spacing:0.1em;
+    display:flex; align-items:center;
+    padding:7px 18px;
+    font-size:0.85rem;
     color:rgba(232,213,176,0.7);
-    z-index:200;
-    gap:20px;
+    z-index:200; gap:20px;
   }
-  .sdot { width:8px; height:8px; background:var(--rust-bright); animation:blink 1s step-end infinite; flex-shrink:0; }
+  .sdot { width:7px; height:7px; background:var(--rust-bright); animation:blink 1s step-end infinite; flex-shrink:0; }
   .status-bar .sr { margin-left:auto; display:flex; gap:18px; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
-  /* forgot */
-  .forgot {
-    text-align:center;
-    font-size:0.75rem;
-    letter-spacing:0.05em;
-    color:rgba(232,213,176,0.6);
-    margin-top:10px;
-  }
-  .forgot a { color:var(--rust-bright); text-decoration:none; font-weight: 600; }
-  .forgot a:hover { color:var(--cream); }
+  .forgot { text-align:center; font-size:0.78rem; color:rgba(232,213,176,0.5); margin-top:8px; }
+  .forgot a { color:var(--rust-bright); text-decoration:none; }
 
-  /* hidden panels */
   .form-panel { display:none; }
   .form-panel.active { display:block; }
 
-  /* error msg */
   .err-msg {
-    font-size:0.8rem;
-    font-weight: 600;
-    color:var(--rust-bright);
-    margin-top: -8px;
-    margin-bottom: 8px;
-    display:none;
-    background: rgba(116,66,52,0.1);
-    padding: 10px;
-    border: 1px solid var(--rust);
+    font-size:0.85rem; color:var(--rust-bright); display:none;
+    background:rgba(116,66,52,0.1); padding:9px 12px;
+    border:1px solid var(--rust);
   }
   .err-msg.show { display:block; }
-  
+
   .success-msg {
-    font-size:0.8rem;
-    font-weight: 600;
-    color: var(--green-bright);
-    margin-top: -8px;
-    margin-bottom: 8px;
-    display:none;
-    background: rgba(28,69,60,0.2);
-    padding: 10px;
-    border: 1px solid var(--green-bright);
+    font-size:0.85rem; color:#5bbf9a; display:none;
+    background:rgba(28,69,60,0.2); padding:9px 12px;
+    border:1px solid var(--green-bright);
   }
   .success-msg.show { display:block; }
 </style>
@@ -362,18 +235,12 @@
 
 <div class="arcade-bg">
   <div class="grid-floor"></div>
-  <div class="pixel"></div>
-  <div class="pixel"></div>
-  <div class="pixel"></div>
-  <div class="pixel"></div>
-  <div class="pixel"></div>
-  <div class="pixel"></div>
-  <div class="pixel"></div>
-  <div class="pixel"></div>
+  <div class="pixel"></div><div class="pixel"></div><div class="pixel"></div>
+  <div class="pixel"></div><div class="pixel"></div><div class="pixel"></div>
+  <div class="pixel"></div><div class="pixel"></div>
 </div>
 
 <div class="page">
-
   <div class="top-bar">
     <div class="logo">ARCADE<span>HUB</span></div>
   </div>
@@ -386,33 +253,31 @@
         <button class="tab-btn" onclick="switchTab('signup')">SIGN UP</button>
       </div>
 
+      <!-- LOGIN -->
       <div class="form-panel active" id="login-panel">
         <div class="field-group">
           <div class="field">
             <div class="field-label">Username</div>
-            <input type="text" id="l-user" placeholder="Enter your username" autocomplete="username">
+            <input type="text" id="l-user" placeholder="Enter your username" autocomplete="off">
           </div>
           <div class="field">
             <div class="field-label">Password</div>
-            <input type="password" id="l-pass" placeholder="Enter your password" autocomplete="current-password">
+            <input type="password" id="l-pass" placeholder="Enter your password" autocomplete="off">
             <button class="eye" onclick="togglePass('l-pass', this)">SHOW</button>
           </div>
           <div class="err-msg" id="l-err"></div>
           <div class="success-msg" id="l-succ"></div>
         </div>
-        <button class="submit-btn" onclick="handleLogin()">CONTINUE</button>
+        <button class="submit-btn" id="login-btn" onclick="handleLogin()">CONTINUE</button>
         <div class="forgot"><a href="#">Forgot password?</a></div>
       </div>
 
+      <!-- SIGNUP -->
       <div class="form-panel" id="signup-panel">
         <div class="field-group">
           <div class="field">
-            <div class="field-label">Email Address</div>
-            <input type="email" id="s-email" placeholder="player@arcade.hub">
-          </div>
-          <div class="field">
             <div class="field-label">Username</div>
-            <input type="text" id="s-user" placeholder="Choose a username">
+            <input type="text" id="s-user" placeholder="Choose a username" autocomplete="off">
           </div>
           <div class="field">
             <div class="field-label">Password</div>
@@ -424,6 +289,18 @@
             <input type="password" id="s-pass2" placeholder="Confirm your password">
             <button class="eye" onclick="togglePass('s-pass2', this)">SHOW</button>
           </div>
+          <div class="field">
+            <div class="field-label">Date of Birth</div>
+            <input type="date" id="s-dob">
+          </div>
+          <div class="field">
+            <div class="field-label">Gender</div>
+            <div class="gender-row">
+              <button class="gender-btn" onclick="selectGender('male', this)">♂ Male</button>
+              <button class="gender-btn" onclick="selectGender('female', this)">♀ Female</button>
+              <button class="gender-btn" onclick="selectGender('other', this)">— Other</button>
+            </div>
+          </div>
           <div class="err-msg" id="s-err"></div>
           <div class="success-msg" id="s-succ"></div>
         </div>
@@ -431,12 +308,11 @@
           <input type="checkbox" id="terms">
           <label for="terms">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></label>
         </div>
-        <button class="submit-btn" onclick="handleSignup()">CREATE ACCOUNT</button>
+        <button class="submit-btn" id="signup-btn" onclick="handleSignup()">CREATE ACCOUNT</button>
       </div>
 
     </div>
   </div>
-
 </div>
 
 <div class="status-bar">
@@ -449,155 +325,139 @@
 </div>
 
 <script>
-  // ─── SUPABASE INITIALIZATION ───
   const SUPABASE_URL = 'https://tmfnmjciuoingrsbxnhr.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZm5tamNpdW9pbmdyc2J4bmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NzYwMjMsImV4cCI6MjA4OTM1MjAyM30.L5s9X6fqtl-BbjWQ2IRsxkXqP0GPEXX5tajR159iYLA'; 
-
-  // CHANGED: We named this "db" instead of "supabase" to prevent the script from crashing
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZm5tamNpdW9pbmdyc2J4bmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NzYwMjMsImV4cCI6MjA4OTM1MjAyM30.L5s9X6fqtl-BbjWQ2IRsxkXqP0GPEXX5tajR159iYLA';
   const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // Clock
+  let selectedGender = '';
+
   function tick() {
     document.getElementById('clock').textContent =
       new Date().toLocaleTimeString('en-US', { hour12: false });
   }
   tick(); setInterval(tick, 1000);
 
-  // Tab switch
   function switchTab(tab) {
-    document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    document.querySelectorAll('.tab-btn').forEach((b, i) => {
       b.classList.toggle('active', (tab==='login' && i===0) || (tab==='signup' && i===1));
     });
     document.getElementById('login-panel').classList.toggle('active', tab==='login');
     document.getElementById('signup-panel').classList.toggle('active', tab==='signup');
-    
-    // Clear messages on tab switch
-    document.getElementById('l-err').classList.remove('show');
-    document.getElementById('s-err').classList.remove('show');
-    document.getElementById('l-succ').classList.remove('show');
-    document.getElementById('s-succ').classList.remove('show');
+    ['l-err','s-err','l-succ','s-succ'].forEach(id => document.getElementById(id).classList.remove('show'));
   }
 
-  // Toggle password visibility
   function togglePass(id, btn) {
     const inp = document.getElementById(id);
-    const isPassword = inp.type === 'password';
-    inp.type = isPassword ? 'text' : 'password';
-    btn.textContent = isPassword ? 'HIDE' : 'SHOW';
-    btn.style.opacity = isPassword ? '1' : '0.5';
+    const isPass = inp.type === 'password';
+    inp.type = isPass ? 'text' : 'password';
+    btn.textContent = isPass ? 'HIDE' : 'SHOW';
+    btn.style.opacity = isPass ? '1' : '0.5';
   }
 
-  // ─── LIVE LOG IN LOGIC ───
+  function selectGender(val, btn) {
+    selectedGender = val;
+    document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  // ── LOGIN ──
+  // Simple direct match: fetch row where username AND password both match
   async function handleLogin() {
     const u = document.getElementById('l-user').value.trim();
     const p = document.getElementById('l-pass').value;
     const err = document.getElementById('l-err');
     const succ = document.getElementById('l-succ');
-    
-    err.classList.remove('show');
-    succ.classList.remove('show');
+    const btn = document.getElementById('login-btn');
 
-    if (!u || !p) { 
-      err.textContent = 'Please fill in all fields.'; 
-      err.classList.add('show'); 
-      return; 
-    }
+    err.classList.remove('show'); succ.classList.remove('show');
 
-    // 1. Look up the email connected to this username profile row
-    const { data: profile, error: profileError } = await db
+    if (!u || !p) { err.textContent = 'Please fill in all fields.'; err.classList.add('show'); return; }
+
+    btn.disabled = true; btn.textContent = 'CHECKING...';
+
+    const { data, error } = await db
       .from('profiles')
-      .select('email')
+      .select('username, password')
       .eq('username', u)
       .maybeSingle();
 
-    if (!profile) {
-      err.textContent = 'Invalid username or credentials.';
-      err.classList.add('show');
-      return;
+    btn.disabled = false; btn.textContent = 'CONTINUE';
+
+    if (error) { err.textContent = 'DB error: ' + error.message; err.classList.add('show'); return; }
+
+    if (!data) {
+      err.textContent = 'Username not found.'; err.classList.add('show'); return;
     }
 
-    // 2. Log in using the email we found and the user's password
-    const { data, error: loginError } = await db.auth.signInWithPassword({
-      email: profile.email,
-      password: p
-    });
-
-    if (loginError) {
-      err.textContent = 'Invalid password. Try again.';
-      err.classList.add('show');
-    } else {
-      succ.textContent = 'Access Granted. Logging you in...';
-      succ.classList.add('show');
+    // exact password match
+    if (data.password !== p) {
+      err.textContent = 'Wrong password. Try again.'; err.classList.add('show'); return;
     }
+
+    succ.textContent = '✓ Access granted. Welcome back, ' + u + '!';
+    succ.classList.add('show');
+    setTimeout(() => { window.location.href = 'games.html'; }, 1500);
   }
 
-  // ─── LIVE SIGN UP LOGIC ───
+  // ── SIGNUP ──
+  // Check duplicate username first using count, then insert
   async function handleSignup() {
-    const e = document.getElementById('s-email').value.trim();
-    const u = document.getElementById('s-user').value.trim();
-    const p = document.getElementById('s-pass').value;
-    const p2 = document.getElementById('s-pass2').value;
-    const t = document.getElementById('terms').checked;
+    const u   = document.getElementById('s-user').value.trim();
+    const p   = document.getElementById('s-pass').value;
+    const p2  = document.getElementById('s-pass2').value;
+    const dob = document.getElementById('s-dob').value;
+    const t   = document.getElementById('terms').checked;
     const err = document.getElementById('s-err');
     const succ = document.getElementById('s-succ');
-    
-    err.classList.remove('show');
-    succ.classList.remove('show');
+    const btn = document.getElementById('signup-btn');
 
-    if (!e || !u || !p || !p2) { 
-      err.textContent = 'Please fill in all fields.'; 
-      err.classList.add('show'); 
-      return; 
-    }
-    
-    if (p !== p2) { 
-      err.textContent = 'Passwords do not match.'; 
-      err.classList.add('show'); 
-      return; 
-    }
-    
-    if (!t) { 
-      err.textContent = 'You must accept the terms to continue.'; 
-      err.classList.add('show'); 
-      return; 
-    }
-    
-    // 1. Check database if username is already taken
-    const { data: existingUser, error: checkError } = await db
+    err.classList.remove('show'); succ.classList.remove('show');
+
+    if (!u || !p || !p2 || !dob)  { err.textContent = 'Please fill in all fields.'; err.classList.add('show'); return; }
+    if (!selectedGender)           { err.textContent = 'Please select your gender.'; err.classList.add('show'); return; }
+    if (p !== p2)                  { err.textContent = 'Passwords do not match.'; err.classList.add('show'); return; }
+    if (p.length < 4)              { err.textContent = 'Password must be at least 4 characters.'; err.classList.add('show'); return; }
+    if (!t)                        { err.textContent = 'Accept the terms to continue.'; err.classList.add('show'); return; }
+
+    btn.disabled = true; btn.textContent = 'CHECKING...';
+
+    // Use count to detect duplicate — more reliable than maybeSingle
+    const { count, error: countErr } = await db
       .from('profiles')
-      .select('username')
-      .eq('username', u)
-      .maybeSingle();
+      .select('username', { count: 'exact', head: true })
+      .eq('username', u);
 
-    if (existingUser) {
-      err.textContent = 'That username is already taken. Please choose another.';
-      err.classList.add('show');
-      return;
+    if (countErr) {
+      btn.disabled = false; btn.textContent = 'CREATE ACCOUNT';
+      err.textContent = 'DB error: ' + countErr.message; err.classList.add('show'); return;
     }
 
-    // 2. Create standard credentials account
-    const { data: authData, error: authError } = await db.auth.signUp({
-      email: e,
-      password: p
-    });
-
-    if (authError) {
-      err.textContent = authError.message;
-      err.classList.add('show');
-      return;
+    if (count > 0) {
+      btn.disabled = false; btn.textContent = 'CREATE ACCOUNT';
+      err.textContent = 'Username "' + u + '" is already taken. Choose another.';
+      err.classList.add('show'); return;
     }
 
-    // 3. Save custom username mapping to profiles table spreadsheet
-    const { error: profileError } = await db
+    btn.textContent = 'CREATING...';
+
+    const { error: insertErr } = await db
       .from('profiles')
-      .insert([{ email: e, username: u }]);
+      .insert([{ username: u, password: p, gender: selectedGender, birthdate: dob }]);
 
-    if (profileError) {
-      err.textContent = 'Account created, but failed to map username.';
+    btn.disabled = false; btn.textContent = 'CREATE ACCOUNT';
+
+    if (insertErr) {
+      // Catch unique constraint violation from DB side too
+      if (insertErr.code === '23505') {
+        err.textContent = 'Username already taken. Choose another.';
+      } else {
+        err.textContent = 'Registration failed: ' + insertErr.message;
+      }
       err.classList.add('show');
     } else {
-      succ.textContent = 'Account created successfully! Welcome, ' + u;
+      succ.textContent = '✓ Account created! Welcome to the hub, ' + u + '!';
       succ.classList.add('show');
+      setTimeout(() => { window.location.href = 'games.html'; }, 1500);
     }
   }
 </script>
