@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ARCADE HUB</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
     --green: #1C453C;
@@ -448,6 +449,12 @@
 </div>
 
 <script>
+  // ─── SUPABASE INITIALIZATION ───
+  const SUPABASE_URL = 'https://tmfnmjciuoingrsbxnhr.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_PPfG_ZYHhFQWiXBqRyDdbQ_3i1igdZ0'; // <-- PASTE YOUR GIANT KEY STRING HERE!
+
+  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
   // Clock
   function tick() {
     document.getElementById('clock').textContent =
@@ -479,8 +486,8 @@
     btn.style.opacity = isPassword ? '1' : '0.5';
   }
 
-  // Login Logic Simulation
-  function handleLogin() {
+  // ─── LIVE LOG IN LOGIC ───
+  async function handleLogin() {
     const u = document.getElementById('l-user').value.trim();
     const p = document.getElementById('l-pass').value;
     const err = document.getElementById('l-err');
@@ -494,14 +501,37 @@
       err.classList.add('show'); 
       return; 
     }
-    
-    // Simulate successful login
-    succ.textContent = 'Logging you in...';
-    succ.classList.add('show');
+
+    // 1. Look up the email connected to this username profile row
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('username', u)
+      .maybeSingle();
+
+    if (!profile) {
+      err.textContent = 'Invalid username or credentials.';
+      err.classList.add('show');
+      return;
+    }
+
+    // 2. Log in using the email we found and the user's password
+    const { data, error: loginError } = await supabase.auth.signInWithPassword({
+      email: profile.email,
+      password: p
+    });
+
+    if (loginError) {
+      err.textContent = 'Invalid password. Try again.';
+      err.classList.add('show');
+    } else {
+      succ.textContent = 'Access Granted. Logging you in...';
+      succ.classList.add('show');
+    }
   }
 
-  // Signup Logic Simulation (checking for taken username)
-  function handleSignup() {
+  // ─── LIVE SIGN UP LOGIC ───
+  async function handleSignup() {
     const e = document.getElementById('s-email').value.trim();
     const u = document.getElementById('s-user').value.trim();
     const p = document.getElementById('s-pass').value;
@@ -531,17 +561,43 @@
       return; 
     }
     
-    // --- DATABASE CHECK SIMULATION ---
-    // If the database returns that the username already exists:
-    if (u.toUpperCase() === 'PLAYER_ONE') {
+    // 1. Check database if username is already taken
+    const { data: existingUser, error: checkError } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('username', u)
+      .maybeSingle();
+
+    if (existingUser) {
       err.textContent = 'That username is already taken. Please choose another.';
       err.classList.add('show');
       return;
     }
 
-    // Simulate successful account creation
-    succ.textContent = 'Account created successfully! Welcome, ' + u;
-    succ.classList.add('show');
+    // 2. Create standard credentials account
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: e,
+      password: p
+    });
+
+    if (authError) {
+      err.textContent = authError.message;
+      err.classList.add('show');
+      return;
+    }
+
+    // 3. Save custom username mapping to profiles table spreadsheet
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert([{ email: e, username: u }]);
+
+    if (profileError) {
+      err.textContent = 'Account created, but failed to map username.';
+      err.classList.add('show');
+    } else {
+      succ.textContent = 'Account created successfully! Welcome, ' + u;
+      succ.classList.add('show');
+    }
   }
 </script>
 </body>
