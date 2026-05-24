@@ -451,9 +451,10 @@
 <script>
   // ─── SUPABASE INITIALIZATION ───
   const SUPABASE_URL = 'https://tmfnmjciuoingrsbxnhr.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZm5tamNpdW9pbmdyc2J4bmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NzYwMjMsImV4cCI6MjA4OTM1MjAyM30.L5s9X6fqtl-BbjWQ2IRsxkXqP0GPEXX5tajR159iYLA'; // <-- PASTE YOUR GIANT KEY STRING HERE!
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZm5tamNpdW9pbmdyc2J4bmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NzYwMjMsImV4cCI6MjA4OTM1MjAyM30.L5s9X6fqtl-BbjWQ2IRsxkXqP0GPEXX5tajR159iYLA'; 
 
-  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  // CHANGED: We named this "db" instead of "supabase" to prevent the script from crashing
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   // Clock
   function tick() {
@@ -503,7 +504,7 @@
     }
 
     // 1. Look up the email connected to this username profile row
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await db
       .from('profiles')
       .select('email')
       .eq('username', u)
@@ -516,7 +517,7 @@
     }
 
     // 2. Log in using the email we found and the user's password
-    const { data, error: loginError } = await supabase.auth.signInWithPassword({
+    const { data, error: loginError } = await db.auth.signInWithPassword({
       email: profile.email,
       password: p
     });
@@ -562,7 +563,7 @@
     }
     
     // 1. Check database if username is already taken
-    const { data: existingUser, error: checkError } = await supabase
+    const { data: existingUser, error: checkError } = await db
       .from('profiles')
       .select('username')
       .eq('username', u)
@@ -575,7 +576,7 @@
     }
 
     // 2. Create standard credentials account
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const { data: authData, error: authError } = await db.auth.signUp({
       email: e,
       password: p
     });
@@ -587,7 +588,7 @@
     }
 
     // 3. Save custom username mapping to profiles table spreadsheet
-    const { error: profileError } = await supabase
+    const { error: profileError } = await db
       .from('profiles')
       .insert([{ email: e, username: u }]);
 
