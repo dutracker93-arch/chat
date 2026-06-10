@@ -1,465 +1,658 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ARCADE HUB</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PONG</title>
 <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
-  :root {
-    --green: #1C453C;
-    --rust: #744234;
-    --green-bright: #2a6b5c;
-    --rust-bright: #a05a45;
-    --cream: #e8d5b0;
-    --scanline-gap: 4px;
-  }
+*, *::before, *::after { box-sizing: border-box; }
 
-  * { margin:0; padding:0; box-sizing:border-box; border-radius:0 !important; font-family: 'Pixelify Sans', sans-serif; }
-
-  body {
-    background: #080808;
-    color: var(--cream);
-    min-height: 100vh;
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
-  }
+    background: #000;
+    font-family: 'Pixelify Sans', monospace;
+    color: #fff;
+}
 
-  body::before {
-    content:'';
-    position:fixed;
-    inset:0;
-    background: repeating-linear-gradient(0deg, transparent, transparent calc(var(--scanline-gap) - 1px), rgba(0,0,0,0.2) var(--scanline-gap));
-    pointer-events:none;
-    z-index:9999;
-  }
+/* ── Canvas always fills screen ─────────────────────────────── */
+#game {
+    display: block;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
 
-  .arcade-bg { position:fixed; inset:0; z-index:0; overflow:hidden; }
+/* ── Full-screen overlay ────────────────────────────────────── */
+#overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    pointer-events: none;
+}
 
-  .arcade-bg::before {
-    content:'';
-    position:absolute;
-    inset:0;
-    background:
-      repeating-linear-gradient(90deg, transparent, transparent 59px, rgba(28,69,60,0.12) 60px),
-      repeating-linear-gradient(0deg, transparent, transparent 59px, rgba(28,69,60,0.12) 60px),
-      #080808;
-  }
+/* ── Individual screens ─────────────────────────────────────── */
+.screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    pointer-events: all;
+    text-align: center;
+    padding: 24px;
+}
 
-  .grid-floor {
-    position:absolute;
-    bottom:0; left:0; right:0; height:55%;
-    background:
-      repeating-linear-gradient(90deg, transparent 0%, transparent calc(5% - 1px), rgba(28,69,60,0.25) 5%),
-      repeating-linear-gradient(180deg, transparent 0%, transparent calc(8% - 1px), rgba(28,69,60,0.18) 8%);
-    transform: perspective(400px) rotateX(35deg);
-    transform-origin: bottom center;
-    opacity: 0.6;
-  }
+.screen.active { display: flex; }
 
-  .pixel { position:absolute; background:var(--green); opacity:0.12; animation:floatPixel linear infinite; }
-  .pixel:nth-child(1)  { width:8px;  height:8px;  top:15%; left:8%;   animation-duration:18s; animation-delay:-2s; }
-  .pixel:nth-child(2)  { width:4px;  height:4px;  top:40%; left:20%;  animation-duration:22s; animation-delay:-7s;  background:var(--rust); opacity:0.15; }
-  .pixel:nth-child(3)  { width:12px; height:4px;  top:60%; left:5%;   animation-duration:15s; animation-delay:-3s; }
-  .pixel:nth-child(4)  { width:6px;  height:6px;  top:25%; left:75%;  animation-duration:20s; animation-delay:-10s; background:var(--rust); opacity:0.1; }
-  .pixel:nth-child(5)  { width:4px;  height:12px; top:70%; left:85%;  animation-duration:17s; animation-delay:-5s; }
-  .pixel:nth-child(6)  { width:8px;  height:8px;  top:10%; left:50%;  animation-duration:25s; animation-delay:-12s; background:var(--rust); opacity:0.08; }
-  .pixel:nth-child(7)  { width:4px;  height:4px;  top:80%; left:40%;  animation-duration:19s; animation-delay:-8s; }
-  .pixel:nth-child(8)  { width:10px; height:4px;  top:35%; left:90%;  animation-duration:23s; animation-delay:-1s;  background:var(--rust); opacity:0.12; }
+/* ── Typography ─────────────────────────────────────────────── */
+.title {
+    font-size: clamp(70px, 13vw, 130px);
+    font-weight: 700;
+    letter-spacing: 10px;
+    text-shadow: 0 0 60px rgba(255,255,255,0.35);
+    margin: 0;
+    line-height: 1;
+}
 
-  @keyframes floatPixel {
-    0%   { transform:translateY(0) rotate(0deg); opacity:0.12; }
-    50%  { opacity:0.2; }
-    100% { transform:translateY(-80px) rotate(180deg); opacity:0; }
-  }
+.label {
+    font-size: clamp(13px, 2vw, 18px);
+    letter-spacing: 4px;
+    opacity: 0.45;
+    margin: 0;
+}
 
-  .page { position:relative; z-index:10; width:100%; min-height:100vh; display:flex; flex-direction:column; }
+/* ── Buttons ────────────────────────────────────────────────── */
+.btn {
+    font-family: 'Pixelify Sans', monospace;
+    font-size: clamp(20px, 3vw, 30px);
+    font-weight: 700;
+    letter-spacing: 4px;
+    padding: 18px 56px;
+    background: transparent;
+    color: #fff;
+    border: 3px solid #fff;
+    cursor: pointer;
+    outline: none;
+    transition: background 0.08s, color 0.08s;
+    min-width: 280px;
+}
 
-  .top-bar {
-    display:flex; align-items:center; justify-content:center;
-    padding:18px 0 14px;
-    border-bottom:2px solid var(--rust);
-    background:rgba(8,8,8,0.85);
-  }
+.btn:hover, .btn:focus {
+    background: #fff;
+    color: #000;
+}
 
-  .logo {
-    font-size:2.4rem;
-    font-weight:700;
-    letter-spacing:0.05em;
-    color:var(--cream);
-    text-shadow:0 0 10px var(--rust-bright), 3px 3px 0 var(--rust);
-  }
-  .logo span { color:var(--rust-bright); }
+.btn-ghost {
+    font-family: 'Pixelify Sans', monospace;
+    font-size: clamp(14px, 1.8vw, 19px);
+    font-weight: 400;
+    letter-spacing: 3px;
+    padding: 10px 32px;
+    background: transparent;
+    color: rgba(255,255,255,0.4);
+    border: 2px solid rgba(255,255,255,0.2);
+    cursor: pointer;
+    outline: none;
+    transition: color 0.08s, border-color 0.08s;
+}
 
-  .center {
-    flex:1; display:flex; align-items:center; justify-content:center;
-    padding:20px 20px 55px;
-    overflow-y:auto;
-  }
+.btn-ghost:hover, .btn-ghost:focus {
+    color: #fff;
+    border-color: rgba(255,255,255,0.7);
+}
 
-  .panel {
-    width:100%; max-width:420px;
-    background:rgba(10,10,10,0.92);
-    border:1px solid var(--rust);
-    box-shadow:0 0 0 1px rgba(28,69,60,0.4), inset 0 0 40px rgba(28,69,60,0.05), 0 20px 60px rgba(0,0,0,0.7);
-    padding:30px 28px 28px;
-    position:relative;
-  }
+/* ── Room code display ──────────────────────────────────────── */
+.room-code {
+    font-size: clamp(62px, 11vw, 112px);
+    font-weight: 700;
+    letter-spacing: 20px;
+    padding: 20px 48px 20px 68px; /* compensate for letter-spacing on right */
+    border: 3px solid rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.04);
+    margin: 0;
+    text-shadow: 0 0 30px rgba(255,255,255,0.6);
+    cursor: default;
+    user-select: all;
+}
 
-  .panel::before, .panel::after {
-    content:''; position:absolute; width:16px; height:16px;
-    border-color:var(--green-bright); border-style:solid; opacity:0.7;
-  }
-  .panel::before { top:-1px; left:-1px; border-width:2px 0 0 2px; }
-  .panel::after  { bottom:-1px; right:-1px; border-width:0 2px 2px 0; }
+/* ── Code input ─────────────────────────────────────────────── */
+.code-input {
+    font-family: 'Pixelify Sans', monospace;
+    font-size: clamp(48px, 8.5vw, 84px);
+    font-weight: 700;
+    letter-spacing: 18px;
+    text-align: center;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid #fff;
+    color: #fff;
+    width: min(360px, 82vw);
+    padding: 8px 0 8px 18px; /* compensate letter-spacing */
+    outline: none;
+    text-transform: uppercase;
+    caret-color: rgba(255,255,255,0.6);
+}
 
-  .tabs {
-    display:grid; grid-template-columns:1fr 1fr;
-    border:1px solid var(--rust);
-    margin-bottom:24px;
-  }
+.code-input::placeholder { opacity: 0.18; letter-spacing: 16px; }
 
-  .tab-btn {
-    background:transparent; border:none;
-    color:rgba(232,213,176,0.6);
-    font-size:1.05rem;
-    text-transform:uppercase;
-    padding:12px; cursor:pointer;
-    transition:background 0.15s, color 0.15s;
-  }
-  .tab-btn:first-child { border-right:1px solid var(--rust); }
-  .tab-btn.active { background:var(--rust); color:var(--cream); font-weight:700; }
+/* ── Error message ──────────────────────────────────────────── */
+.err {
+    font-size: 16px;
+    color: #ff5555;
+    letter-spacing: 2px;
+    min-height: 22px;
+    margin: -12px 0;
+}
 
-  .field-group { display:flex; flex-direction:column; gap:14px; margin-bottom:20px; }
+/* ── Waiting pulse ──────────────────────────────────────────── */
+.waiting {
+    font-size: clamp(15px, 2.2vw, 21px);
+    letter-spacing: 3px;
+    opacity: 0.7;
+    animation: pulse 2s ease-in-out infinite;
+}
 
-  .field { position:relative; }
+@keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50%       { opacity: 0.9; }
+}
 
-  .field-label {
-    font-size:0.9rem;
-    color:rgba(232,213,176,0.7);
-    text-transform:uppercase;
-    margin-bottom:6px;
-  }
+/* ── Controls hint on hosting/joining screens ───────────────── */
+.controls-hint {
+    font-size: 14px;
+    letter-spacing: 3px;
+    opacity: 0.3;
+    margin-top: 4px;
+}
 
-  .field input {
-    width:100%;
-    background:rgba(28,69,60,0.08);
-    border:1px solid rgba(116,66,52,0.5);
-    color:var(--cream);
-    font-size:0.95rem;
-    padding:11px 44px 11px 14px;
-    outline:none;
-    transition:border-color 0.15s, background 0.15s;
-  }
-  .field input::placeholder { color:rgba(232,213,176,0.3); }
-  .field input:focus { border-color:var(--green-bright); background:rgba(28,69,60,0.15); }
+/* ── Button stack ───────────────────────────────────────────── */
+.btn-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+}
 
-  .field .eye {
-    position:absolute; right:12px; top:50%; transform:translateY(-50%);
-    background:none; border:none; color:rgba(232,213,176,0.5);
-    cursor:pointer; font-size:0.85rem; padding:0;
-    transition:color 0.1s;
-  }
-  .field .eye:hover { color:var(--cream); }
-
-  .field input[type="date"] { color-scheme:dark; padding-right:14px; }
-
-  .gender-row {
-    display:grid; grid-template-columns:1fr 1fr 1fr;
-    border:1px solid rgba(116,66,52,0.5);
-  }
-
-  .gender-btn {
-    background:rgba(28,69,60,0.08); border:none;
-    border-right:1px solid rgba(116,66,52,0.4);
-    color:rgba(232,213,176,0.4);
-    font-size:0.9rem; text-transform:uppercase;
-    padding:11px 6px; cursor:pointer;
-    transition:background 0.15s, color 0.15s;
-  }
-  .gender-btn:last-child { border-right:none; }
-  .gender-btn.active { background:var(--rust); color:var(--cream); font-weight:700; }
-
-  .submit-btn {
-    width:100%; background:var(--rust); border:none;
-    color:var(--cream); font-size:1.2rem; font-weight:700;
-    text-transform:uppercase; padding:14px; cursor:pointer;
-    transition:background 0.15s; margin-bottom:12px;
-  }
-  .submit-btn:hover { background:var(--green); }
-  .submit-btn:disabled { opacity:0.5; cursor:not-allowed; background:var(--rust); }
-
-  .terms-row { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
-  .terms-row input[type=checkbox] { width:15px; height:15px; accent-color:var(--rust); cursor:pointer; flex-shrink:0; }
-  .terms-row label { font-size:0.78rem; color:rgba(232,213,176,0.6); cursor:pointer; }
-  .terms-row label a { color:var(--rust-bright); text-decoration:none; font-weight:700; }
-
-  .status-bar {
-    position:fixed; bottom:0; left:0; right:0;
-    background:rgba(28,69,60,0.95);
-    border-top:1px solid var(--rust);
-    display:flex; align-items:center;
-    padding:7px 18px;
-    font-size:0.85rem;
-    color:rgba(232,213,176,0.7);
-    z-index:200; gap:20px;
-  }
-  .sdot { width:7px; height:7px; background:var(--rust-bright); animation:blink 1s step-end infinite; flex-shrink:0; }
-  .status-bar .sr { margin-left:auto; display:flex; gap:18px; }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
-
-  .forgot { text-align:center; font-size:0.78rem; color:rgba(232,213,176,0.5); margin-top:8px; }
-  .forgot a { color:var(--rust-bright); text-decoration:none; }
-
-  .form-panel { display:none; }
-  .form-panel.active { display:block; }
-
-  .err-msg {
-    font-size:0.85rem; color:var(--rust-bright); display:none;
-    background:rgba(116,66,52,0.1); padding:9px 12px;
-    border:1px solid var(--rust);
-  }
-  .err-msg.show { display:block; }
-
-  .success-msg {
-    font-size:0.85rem; color:#5bbf9a; display:none;
-    background:rgba(28,69,60,0.2); padding:9px 12px;
-    border:1px solid var(--green-bright);
-  }
-  .success-msg.show { display:block; }
+/* ── Disconnect screen glow ─────────────────────────────────── */
+.title-red {
+    text-shadow: 0 0 50px rgba(255, 60, 60, 0.55);
+    color: #fff;
+}
 </style>
 </head>
 <body>
 
-<div class="arcade-bg">
-  <div class="grid-floor"></div>
-  <div class="pixel"></div><div class="pixel"></div><div class="pixel"></div>
-  <div class="pixel"></div><div class="pixel"></div><div class="pixel"></div>
-  <div class="pixel"></div><div class="pixel"></div>
-</div>
+<canvas id="game"></canvas>
 
-<div class="page">
-  <div class="top-bar">
-    <div class="logo">ARCADE<span>HUB</span></div>
-  </div>
+<div id="overlay">
 
-  <div class="center">
-    <div class="panel">
-
-      <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('login')">LOG IN</button>
-        <button class="tab-btn" onclick="switchTab('signup')">SIGN UP</button>
-      </div>
-
-      <!-- LOGIN -->
-      <div class="form-panel active" id="login-panel">
-        <div class="field-group">
-          <div class="field">
-            <div class="field-label">Username</div>
-            <input type="text" id="l-user" placeholder="Enter your username" autocomplete="off">
-          </div>
-          <div class="field">
-            <div class="field-label">Password</div>
-            <input type="password" id="l-pass" placeholder="Enter your password" autocomplete="off">
-            <button class="eye" onclick="togglePass('l-pass', this)">SHOW</button>
-          </div>
-          <div class="err-msg" id="l-err"></div>
-          <div class="success-msg" id="l-succ"></div>
+    <!-- ─── MENU ──────────────────────────────────────────────── -->
+    <div id="screen-menu" class="screen active">
+        <h1 class="title">PONG</h1>
+        <div class="btn-stack" style="margin-top: 12px;">
+            <button class="btn" id="btn-host">HOST GAME</button>
+            <button class="btn" id="btn-go-join">JOIN GAME</button>
         </div>
-        <button class="submit-btn" id="login-btn" onclick="handleLogin()">CONTINUE</button>
-        <div class="forgot"><a href="#">Forgot password?</a></div>
-      </div>
-
-      <!-- SIGNUP -->
-      <div class="form-panel" id="signup-panel">
-        <div class="field-group">
-          <div class="field">
-            <div class="field-label">Username</div>
-            <input type="text" id="s-user" placeholder="Choose a username" autocomplete="off">
-          </div>
-          <div class="field">
-            <div class="field-label">Password</div>
-            <input type="password" id="s-pass" placeholder="Create a password">
-            <button class="eye" onclick="togglePass('s-pass', this)">SHOW</button>
-          </div>
-          <div class="field">
-            <div class="field-label">Confirm Password</div>
-            <input type="password" id="s-pass2" placeholder="Confirm your password">
-            <button class="eye" onclick="togglePass('s-pass2', this)">SHOW</button>
-          </div>
-          <div class="field">
-            <div class="field-label">Date of Birth</div>
-            <input type="date" id="s-dob">
-          </div>
-          <div class="field">
-            <div class="field-label">Gender</div>
-            <div class="gender-row">
-              <button class="gender-btn" onclick="selectGender('male', this)">♂ Male</button>
-              <button class="gender-btn" onclick="selectGender('female', this)">♀ Female</button>
-              <button class="gender-btn" onclick="selectGender('other', this)">— Other</button>
-            </div>
-          </div>
-          <div class="err-msg" id="s-err"></div>
-          <div class="success-msg" id="s-succ"></div>
-        </div>
-        <div class="terms-row">
-          <input type="checkbox" id="terms">
-          <label for="terms">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></label>
-        </div>
-        <button class="submit-btn" id="signup-btn" onclick="handleSignup()">CREATE ACCOUNT</button>
-      </div>
-
     </div>
-  </div>
-</div>
 
-<div class="status-bar">
-  <div class="sdot"></div>
-  <span>SYS: ONLINE</span>
-  <div class="sr">
-    <span id="clock"></span>
-    <span>P1 READY</span>
-  </div>
+    <!-- ─── HOSTING (waiting for opponent) ────────────────────── -->
+    <div id="screen-hosting" class="screen">
+        <p class="label">ROOM CODE</p>
+        <p class="room-code" id="display-code">----</p>
+        <p class="waiting">Waiting for opponent...</p>
+        <p class="controls-hint">YOU ARE LEFT PLAYER &nbsp;·&nbsp; W / S TO MOVE</p>
+        <button class="btn-ghost" id="btn-cancel">CANCEL</button>
+    </div>
+
+    <!-- ─── JOINING (enter code) ──────────────────────────────── -->
+    <div id="screen-joining" class="screen">
+        <h1 class="title" style="font-size: clamp(42px, 7vw, 80px); letter-spacing: 6px;">JOIN GAME</h1>
+        <p class="label" style="margin-top: -8px;">ENTER ROOM CODE</p>
+        <input class="code-input" id="code-input" maxlength="4" placeholder="XXXX"
+               autocomplete="off" autocorrect="off" spellcheck="false" />
+        <p class="err" id="join-err"></p>
+        <div class="btn-stack">
+            <button class="btn" id="btn-join">JOIN</button>
+            <button class="btn-ghost" id="btn-back">BACK</button>
+        </div>
+        <p class="controls-hint">YOU ARE RIGHT PLAYER &nbsp;·&nbsp; ↑ / ↓ TO MOVE</p>
+    </div>
+
+    <!-- ─── OPPONENT LEFT ─────────────────────────────────────── -->
+    <div id="screen-disconnected" class="screen">
+        <h1 class="title title-red" style="font-size: clamp(38px, 6.5vw, 76px); line-height: 1.2;">
+            OPPONENT<br>LEFT
+        </h1>
+        <button class="btn" id="btn-menu">MAIN MENU</button>
+    </div>
+
 </div>
 
 <script>
-  const SUPABASE_URL = 'https://tmfnmjciuoingrsbxnhr.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZm5tamNpdW9pbmdyc2J4bmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NzYwMjMsImV4cCI6MjA4OTM1MjAyM30.L5s9X6fqtl-BbjWQ2IRsxkXqP0GPEXX5tajR159iYLA';
-  const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+/* ══════════════════════════════════════════════════════════════════
+   CONSTANTS  (must mirror server.js)
+   ══════════════════════════════════════════════════════════════════ */
+const VW = 1280, VH = 720;
+const PW = 20, PH = 140, BS = 18;
 
-  let selectedGender = '';
+/* ══════════════════════════════════════════════════════════════════
+   CANVAS
+   ══════════════════════════════════════════════════════════════════ */
+const canvas = document.getElementById('game');
+const ctx    = canvas.getContext('2d');
 
-  function tick() {
-    document.getElementById('clock').textContent =
-      new Date().toLocaleTimeString('en-US', { hour12: false });
-  }
-  tick(); setInterval(tick, 1000);
+function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
 
-  function switchTab(tab) {
-    document.querySelectorAll('.tab-btn').forEach((b, i) => {
-      b.classList.toggle('active', (tab==='login' && i===0) || (tab==='signup' && i===1));
-    });
-    document.getElementById('login-panel').classList.toggle('active', tab==='login');
-    document.getElementById('signup-panel').classList.toggle('active', tab==='signup');
-    ['l-err','s-err','l-succ','s-succ'].forEach(id => document.getElementById(id).classList.remove('show'));
-  }
+/* ══════════════════════════════════════════════════════════════════
+   APP STATE
+   ══════════════════════════════════════════════════════════════════ */
+let ws     = null;
+let myRole = null;   // 'left' | 'right'
+let inGame = false;
 
-  function togglePass(id, btn) {
-    const inp = document.getElementById(id);
-    const isPass = inp.type === 'password';
-    inp.type = isPass ? 'text' : 'password';
-    btn.textContent = isPass ? 'HIDE' : 'SHOW';
-    btn.style.opacity = isPass ? '1' : '0.5';
-  }
+// Latest state snapshot from server
+let gs = null;
 
-  function selectGender(val, btn) {
-    selectedGender = val;
-    document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  }
+/* ══════════════════════════════════════════════════════════════════
+   LOCAL ANIMATION STATE  (client-side only)
+   ══════════════════════════════════════════════════════════════════ */
+let cdScale  = 1,   cdRot = 0, cdAlpha = 1;
+let lastCi   = -1;  // last countdown index (to detect change)
 
-  // ── LOGIN ──
-  // Simple direct match: fetch row where username AND password both match
-  async function handleLogin() {
-    const u = document.getElementById('l-user').value.trim();
-    const p = document.getElementById('l-pass').value;
-    const err = document.getElementById('l-err');
-    const succ = document.getElementById('l-succ');
-    const btn = document.getElementById('login-btn');
+let lPop = 1,  rPop = 1;
+let lShk = 0,  rShk = 0;
+let lastLS = 0, lastRS = 0;
 
-    err.classList.remove('show'); succ.classList.remove('show');
+let shakeX = 0, shakeY = 0;
 
-    if (!u || !p) { err.textContent = 'Please fill in all fields.'; err.classList.add('show'); return; }
+// Idle demo (shown behind lobby screens)
+const demo = {
+    bx: VW / 2, by: VH / 2,
+    bvx: 5.2,   bvy: 3.8,
+    ly: VH / 2 - PH / 2,
+    ry: VH / 2 - PH / 2,
+};
 
-    btn.disabled = true; btn.textContent = 'CHECKING...';
+/* ══════════════════════════════════════════════════════════════════
+   INPUT
+   ══════════════════════════════════════════════════════════════════ */
+const keys = {};
+let sentUp = false, sentDn = false;
 
-    const { data, error } = await db
-      .from('profiles')
-      .select('username, password')
-      .eq('username', u)
-      .maybeSingle();
+document.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+    sendInput();
+});
+document.addEventListener('keyup', e => {
+    keys[e.key.toLowerCase()] = false;
+    sendInput();
+});
 
-    btn.disabled = false; btn.textContent = 'CONTINUE';
-
-    if (error) { err.textContent = 'DB error: ' + error.message; err.classList.add('show'); return; }
-
-    if (!data) {
-      err.textContent = 'Username not found.'; err.classList.add('show'); return;
+function sendInput() {
+    if (!ws || ws.readyState !== 1 || !inGame) return;
+    const up   = !!(myRole === 'left' ? keys['w']       : keys['arrowup']);
+    const down = !!(myRole === 'left' ? keys['s']       : keys['arrowdown']);
+    if (up !== sentUp || down !== sentDn) {
+        ws.send(JSON.stringify({ type: 'input', up, down }));
+        sentUp = up;
+        sentDn = down;
     }
+}
 
-    // exact password match
-    if (data.password !== p) {
-      err.textContent = 'Wrong password. Try again.'; err.classList.add('show'); return;
-    }
-
-    succ.textContent = '✓ Access granted. Welcome back, ' + u + '!';
-    succ.classList.add('show');
-    setTimeout(() => { window.location.href = 'games.html'; }, 1500);
-  }
-
-  // ── SIGNUP ──
-  // Check duplicate username first using count, then insert
-  async function handleSignup() {
-    const u   = document.getElementById('s-user').value.trim();
-    const p   = document.getElementById('s-pass').value;
-    const p2  = document.getElementById('s-pass2').value;
-    const dob = document.getElementById('s-dob').value;
-    const t   = document.getElementById('terms').checked;
-    const err = document.getElementById('s-err');
-    const succ = document.getElementById('s-succ');
-    const btn = document.getElementById('signup-btn');
-
-    err.classList.remove('show'); succ.classList.remove('show');
-
-    if (!u || !p || !p2 || !dob)  { err.textContent = 'Please fill in all fields.'; err.classList.add('show'); return; }
-    if (!selectedGender)           { err.textContent = 'Please select your gender.'; err.classList.add('show'); return; }
-    if (p !== p2)                  { err.textContent = 'Passwords do not match.'; err.classList.add('show'); return; }
-    if (p.length < 4)              { err.textContent = 'Password must be at least 4 characters.'; err.classList.add('show'); return; }
-    if (!t)                        { err.textContent = 'Accept the terms to continue.'; err.classList.add('show'); return; }
-
-    btn.disabled = true; btn.textContent = 'CHECKING...';
-
-    // Use count to detect duplicate — more reliable than maybeSingle
-    const { count, error: countErr } = await db
-      .from('profiles')
-      .select('username', { count: 'exact', head: true })
-      .eq('username', u);
-
-    if (countErr) {
-      btn.disabled = false; btn.textContent = 'CREATE ACCOUNT';
-      err.textContent = 'DB error: ' + countErr.message; err.classList.add('show'); return;
-    }
-
-    if (count > 0) {
-      btn.disabled = false; btn.textContent = 'CREATE ACCOUNT';
-      err.textContent = 'Username "' + u + '" is already taken. Choose another.';
-      err.classList.add('show'); return;
-    }
-
-    btn.textContent = 'CREATING...';
-
-    const { error: insertErr } = await db
-      .from('profiles')
-      .insert([{ username: u, password: p, gender: selectedGender, birthdate: dob }]);
-
-    btn.disabled = false; btn.textContent = 'CREATE ACCOUNT';
-
-    if (insertErr) {
-      // Catch unique constraint violation from DB side too
-      if (insertErr.code === '23505') {
-        err.textContent = 'Username already taken. Choose another.';
-      } else {
-        err.textContent = 'Registration failed: ' + insertErr.message;
-      }
-      err.classList.add('show');
+/* ══════════════════════════════════════════════════════════════════
+   SCREEN MANAGEMENT
+   ══════════════════════════════════════════════════════════════════ */
+function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const overlay = document.getElementById('overlay');
+    if (id) {
+        document.getElementById('screen-' + id).classList.add('active');
+        overlay.style.pointerEvents = '';
+        inGame = false;
     } else {
-      succ.textContent = '✓ Account created! Welcome to the hub, ' + u + '!';
-      succ.classList.add('show');
-      setTimeout(() => { window.location.href = 'games.html'; }, 1500);
+        // null = hide all overlays → game mode
+        overlay.style.pointerEvents = 'none';
+        inGame = true;
     }
-  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   WEBSOCKET
+   ══════════════════════════════════════════════════════════════════ */
+function connect(onOpen) {
+    if (ws && ws.readyState < 2) ws.close();
+
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.host}`);
+
+    ws.onopen    = onOpen;
+    ws.onmessage = ({ data }) => {
+        let msg;
+        try { msg = JSON.parse(data); } catch { return; }
+        handleMsg(msg);
+    };
+    ws.onclose   = handleClose;
+    ws.onerror   = () => {};
+}
+
+function handleClose() {
+    if (inGame) {
+        inGame = false;
+        showScreen('disconnected');
+    }
+    ws = null;
+}
+
+function handleMsg(msg) {
+    switch (msg.type) {
+
+        case 'hosted':
+            document.getElementById('display-code').textContent = msg.code;
+            showScreen('hosting');
+            break;
+
+        case 'opponentJoined':
+            beginGame('left');
+            break;
+
+        case 'joined':
+            beginGame('right');
+            break;
+
+        case 'state':
+            processState(msg);
+            break;
+
+        case 'opponentLeft':
+            inGame = false;
+            showScreen('disconnected');
+            break;
+
+        case 'error':
+            document.getElementById('join-err').textContent = msg.msg || 'Something went wrong.';
+            break;
+    }
+}
+
+function beginGame(role) {
+    myRole  = role;
+    gs      = null;
+    sentUp  = false;
+    sentDn  = false;
+
+    // Reset client-side animation state
+    cdScale  = 2.5;
+    cdRot    = 0;
+    cdAlpha  = 0;
+    lastCi   = -1;
+    lPop     = 1;  rPop  = 1;
+    lShk     = 0;  rShk  = 0;
+    lastLS   = 0;  lastRS = 0;
+
+    showScreen(null);
+}
+
+function processState(msg) {
+    // Detect countdown index change → restart pop animation
+    if (msg.ci !== lastCi) {
+        cdScale = 2.5;
+        cdRot   = (Math.random() - 0.5) * 0.25;
+        cdAlpha = 0;
+        lastCi  = msg.ci;
+    }
+
+    // Detect score changes → trigger pops
+    if (msg.ls > lastLS) { lPop = 2.2; lShk = 0.35;  lastLS = msg.ls; }
+    if (msg.rs > lastRS) { rPop = 2.2; rShk = -0.35; lastRS = msg.rs; }
+
+    gs = msg;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   UI BUTTON HANDLERS
+   ══════════════════════════════════════════════════════════════════ */
+document.getElementById('btn-host').onclick = () => {
+    connect(() => ws.send(JSON.stringify({ type: 'host' })));
+};
+
+document.getElementById('btn-go-join').onclick = () => {
+    document.getElementById('join-err').textContent = '';
+    document.getElementById('code-input').value = '';
+    showScreen('joining');
+    setTimeout(() => document.getElementById('code-input').focus(), 60);
+};
+
+document.getElementById('btn-join').onclick = doJoin;
+
+document.getElementById('code-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doJoin();
+});
+
+function doJoin() {
+    const code = document.getElementById('code-input').value.toUpperCase().trim();
+    document.getElementById('join-err').textContent = '';
+
+    if (code.length !== 4) {
+        document.getElementById('join-err').textContent = 'Code must be 4 characters.';
+        return;
+    }
+    connect(() => ws.send(JSON.stringify({ type: 'join', code })));
+}
+
+document.getElementById('btn-back').onclick = () => {
+    showScreen('menu');
+    if (ws) { ws.close(); ws = null; }
+};
+
+document.getElementById('btn-cancel').onclick = () => {
+    showScreen('menu');
+    if (ws) { ws.close(); ws = null; }
+};
+
+document.getElementById('btn-menu').onclick = () => {
+    showScreen('menu');
+    gs = null;
+    if (ws) { ws.close(); ws = null; }
+};
+
+/* ══════════════════════════════════════════════════════════════════
+   RENDER LOOP
+   ══════════════════════════════════════════════════════════════════ */
+function tickAnimations() {
+    // Countdown pop
+    cdScale += (1 - cdScale)  * 0.12;
+    cdRot   *= 0.9;
+    cdAlpha += (1 - cdAlpha)  * 0.12;
+
+    // Score pops
+    lPop += (1 - lPop) * 0.14;
+    rPop += (1 - rPop) * 0.14;
+    lShk *= 0.85;
+    rShk *= 0.85;
+
+    // Camera shake (uses server's shake power)
+    if (gs) {
+        shakeX = (Math.random() - 0.5) * gs.shake;
+        shakeY = (Math.random() - 0.5) * gs.shake;
+    }
+
+    // Idle demo ball
+    if (!inGame) {
+        demo.bx += demo.bvx;
+        demo.by += demo.bvy;
+        if (demo.by < 0)         { demo.by = 0;       demo.bvy *= -1; }
+        if (demo.by + BS > VH)   { demo.by = VH - BS; demo.bvy *= -1; }
+        if (demo.bx < 70)        { demo.bx = 70;       demo.bvx  = Math.abs(demo.bvx); }
+        if (demo.bx + BS > VW - 70) { demo.bx = VW - 70 - BS; demo.bvx = -Math.abs(demo.bvx); }
+        // Paddle AI
+        const t = demo.by + BS / 2 - PH / 2;
+        demo.ly += (t - demo.ly) * 0.045;
+        demo.ry += (t - demo.ry) * 0.045;
+    }
+}
+
+function drawScore(score, x, y, scale, rot) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    ctx.scale(scale, scale);
+    ctx.font = '90px "Pixelify Sans", monospace';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth    = 10;
+    ctx.strokeStyle  = '#000';
+    ctx.strokeText(score, 0, 0);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(score, 0, 0);
+    ctx.restore();
+}
+
+function drawCountdown(text, color) {
+    ctx.save();
+    ctx.translate(VW / 2, VH / 2 - 20);
+    ctx.rotate(cdRot);
+    ctx.scale(cdScale, cdScale);
+    ctx.globalAlpha  = cdAlpha;
+    ctx.font = '140px "Pixelify Sans", monospace';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth    = 16;
+    ctx.strokeStyle  = '#000';
+    ctx.strokeText(text, 0, 0);
+    ctx.shadowBlur   = 40;
+    ctx.shadowColor  = color;
+    ctx.fillStyle    = color;
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+}
+
+function drawLobby() {
+    const sx = canvas.width  / VW;
+    const sy = canvas.height / VH;
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.setTransform(sx, 0, 0, sy, 0, 0);
+
+    // Subtle center dashes
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    for (let y = 0; y < VH; y += 40) ctx.fillRect(VW / 2 - 5, y, 10, 20);
+
+    // Ghost paddles
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(50,       demo.ly, PW, PH);
+    ctx.fillRect(VW - 70,  demo.ry, PW, PH);
+
+    // Ghost ball
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.fillRect(demo.bx, demo.by, BS, BS);
+
+    ctx.restore();
+}
+
+function drawGameFrame() {
+    if (!gs) return;
+
+    const sx = canvas.width  / VW;
+    const sy = canvas.height / VH;
+
+    // Fill black (absorbs shake gaps at edges)
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // ── Apply scale + shake transform ───────────────────────────
+    ctx.save();
+    ctx.setTransform(sx, 0, 0, sy, shakeX * sx, shakeY * sy);
+
+    // Center dashes
+    ctx.fillStyle = '#fff';
+    for (let y = 0; y < VH; y += 40) ctx.fillRect(VW / 2 - 5, y, 10, 20);
+
+    // Paddles
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(gs.lp.x, gs.lp.y, PW, PH);
+    ctx.fillRect(gs.rp.x, gs.rp.y, PW, PH);
+
+    // Ball
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(gs.ball.x, gs.ball.y, BS, BS);
+
+    // Scores
+    const lx = VW / 2 - 120 + lShk * 10;
+    const rx = VW / 2 + 120 + rShk * 10;
+    drawScore(gs.ls, lx, 90, lPop, lShk * 0.03);
+    drawScore(gs.rs, rx, 90, rPop, rShk * 0.03);
+
+    // "YOU" indicator below the player's own score
+    ctx.font = '20px "Pixelify Sans", monospace';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle    = 'rgba(255,255,255,0.3)';
+    if (myRole === 'left')  ctx.fillText('YOU', lx, 148);
+    if (myRole === 'right') ctx.fillText('YOU', rx, 148);
+
+    // Countdown
+    if (gs.phase === 'countdown') drawCountdown(gs.ct, gs.cc);
+
+    ctx.restore();
+
+    // ── Flash overlay (screen coords, no transform) ─────────────
+    if (gs.flash > 0.01) {
+        ctx.save();
+        ctx.fillStyle = `rgba(255,255,255,${gs.flash * 0.55})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+    }
+
+    // ── Controls reminder (bottom corner, screen coords) ─────────
+    ctx.save();
+    ctx.font          = '15px "Pixelify Sans", monospace';
+    ctx.fillStyle     = 'rgba(255,255,255,0.22)';
+    ctx.textBaseline  = 'bottom';
+    const hy          = canvas.height - 18;
+    if (myRole === 'left') {
+        ctx.textAlign = 'left';
+        ctx.fillText('W / S', 24, hy);
+    } else {
+        ctx.textAlign = 'right';
+        ctx.fillText('↑ / ↓', canvas.width - 24, hy);
+    }
+    ctx.restore();
+}
+
+function loop() {
+    tickAnimations();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (inGame) {
+        drawGameFrame();
+    } else {
+        drawLobby();
+    }
+
+    requestAnimationFrame(loop);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   KICK OFF
+   ══════════════════════════════════════════════════════════════════ */
+showScreen('menu');
+loop();
 </script>
 </body>
 </html>
