@@ -335,8 +335,7 @@ function showScreen(id) {
 function connect(onOpen) {
     if (ws && ws.readyState < 2) ws.close();
 
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${proto}//${location.host}`);
+  ws = new WebSocket("https://dutracker93-arch.github.io/chat/");
 
     ws.onopen    = onOpen;
     ws.onmessage = ({ data }) => {
