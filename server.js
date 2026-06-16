@@ -211,6 +211,7 @@ function startGameLoop(room) {
     room.gameLoop = setInterval(() => {
         updateGame(room);
         broadcastState(room);
+        
     }, 1000 / TICK_RATE);
 }
 
