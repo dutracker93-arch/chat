@@ -63,162 +63,265 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#000
   </div>
 </div>
 <script>
-const VW=1280,VH=720,PW=20,PH=140,BS=18;
-const canvas=document.getElementById('game');
-const ctx=canvas.getContext('2d');
-function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
-window.addEventListener('resize',resize);resize();
+// ── Constants (must match server) ─────────────────────────────────────────────
+const VW=1280, VH=720, PW=20, PH=140, BS=18, PS=10;
 
-let ws=null,myRole=null,inGame=false,gs=null;
-let cdScale=1,cdRot=0,cdAlpha=1,lastCi=-1;
-let lPop=1,rPop=1,lShk=0,rShk=0,lastLS=0,lastRS=0;
-let shakeX=0,shakeY=0;
-const demo={bx:VW/2,by:VH/2,bvx:5.2,bvy:3.8,ly:VH/2-PH/2,ry:VH/2-PH/2};
-const keys={};let sentUp=false,sentDn=false;
+// ── Lag-reduction tunables ────────────────────────────────────────────────────
+const INTERP_DELAY   = 100;  // ms: how far behind we render (smooths opponent movement)
+const RECONCILE_SNAP = 80;   // px: hard-snap own paddle if server disagrees by this much
+const RECONCILE_LERP = 0.25; // fraction: soft correction per frame for smaller drifts
 
-document.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;sendInput();});
-document.addEventListener('keyup',  e=>{keys[e.key.toLowerCase()]=false;sendInput();});
+// ── Canvas ────────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('game');
+const ctx    = canvas.getContext('2d');
+function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+// ── Game state ────────────────────────────────────────────────────────────────
+let ws=null, myRole=null, inGame=false, gs=null;
+
+// Interpolation: ring buffer of {t, s} — timestamped server snapshots
+const stateBuf = [];
+const BUF_MAX  = 64;
+
+// Client-side prediction: local copy of own paddle Y
+let localPaddleY = VH/2 - PH/2;
+
+// Animation state
+let cdScale=1, cdRot=0, cdAlpha=1, lastCi=-1;
+let lPop=1, rPop=1, lShk=0, rShk=0, lastLS=0, lastRS=0;
+let shakeX=0, shakeY=0;
+
+// Demo (lobby background)
+const demo = {bx:VW/2, by:VH/2, bvx:5.2, bvy:3.8, ly:VH/2-PH/2, ry:VH/2-PH/2};
+
+// Input
+const keys = {};
+let sentUp=false, sentDn=false;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function lerp(a, b, t){ return a + (b-a)*t; }
+
+// ── Input handling ────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e=>{ keys[e.key.toLowerCase()]=true;  sendInput(); });
+document.addEventListener('keyup',   e=>{ keys[e.key.toLowerCase()]=false; sendInput(); });
 
 function sendInput(){
-  if(!ws||ws.readyState!==1||!inGame)return;
-  const up=!!(myRole==='left'?keys['w']:keys['arrowup']);
-  const down=!!(myRole==='left'?keys['s']:keys['arrowdown']);
-  if(up!==sentUp||down!==sentDn){ws.send(JSON.stringify({type:'input',up,down}));sentUp=up;sentDn=down;}
+  if(!ws || ws.readyState!==1 || !inGame) return;
+  const up   = !!(myRole==='left' ? keys['w']       : keys['arrowup']);
+  const down = !!(myRole==='left' ? keys['s']       : keys['arrowdown']);
+  if(up!==sentUp || down!==sentDn){
+    ws.send(JSON.stringify({type:'input', up, down}));
+    sentUp=up; sentDn=down;
+  }
 }
 
+// ── Client-side prediction ────────────────────────────────────────────────────
+function stepLocalPaddle(){
+  if(!inGame || !gs) return;
+  const up   = myRole==='left' ? keys['w'] : keys['arrowup'];
+  const down = myRole==='left' ? keys['s'] : keys['arrowdown'];
+  if(up)   localPaddleY -= PS;
+  if(down) localPaddleY += PS;
+  localPaddleY = Math.max(0, Math.min(VH-PH, localPaddleY));
+}
+
+function reconcile(serverY){
+  const diff = serverY - localPaddleY;
+  if(Math.abs(diff) > RECONCILE_SNAP){
+    localPaddleY = serverY;
+  } else {
+    localPaddleY += diff * RECONCILE_LERP;
+  }
+}
+
+// ── Entity interpolation ──────────────────────────────────────────────────────
+function getInterp(){
+  if(stateBuf.length === 0) return null;
+  if(stateBuf.length === 1) return {lp:stateBuf[0].s.lp, rp:stateBuf[0].s.rp, ball:stateBuf[0].s.ball};
+
+  const renderTime = Date.now() - INTERP_DELAY;
+
+  let lo = 0;
+  for(let i=stateBuf.length-1; i>=0; i--){
+    if(stateBuf[i].t <= renderTime){ lo=i; break; }
+  }
+  const hi = Math.min(lo+1, stateBuf.length-1);
+  if(lo === hi) return {lp:stateBuf[lo].s.lp, rp:stateBuf[lo].s.rp, ball:stateBuf[lo].s.ball};
+
+  const a = stateBuf[lo], b = stateBuf[hi];
+  const t = Math.max(0, Math.min(1, (renderTime - a.t) / (b.t - a.t)));
+  return {
+    lp:   { x: lerp(a.s.lp.x,   b.s.lp.x,   t), y: lerp(a.s.lp.y,   b.s.lp.y,   t) },
+    rp:   { x: lerp(a.s.rp.x,   b.s.rp.x,   t), y: lerp(a.s.rp.y,   b.s.rp.y,   t) },
+    ball: { x: lerp(a.s.ball.x,  b.s.ball.x, t), y: lerp(a.s.ball.y,  b.s.ball.y, t) },
+  };
+}
+
+// ── Screen management ─────────────────────────────────────────────────────────
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  const ov=document.getElementById('overlay');
-  if(id){document.getElementById('screen-'+id).classList.add('active');ov.style.pointerEvents='';inGame=false;}
-  else{ov.style.pointerEvents='none';inGame=true;}
+  const ov = document.getElementById('overlay');
+  if(id){ document.getElementById('screen-'+id).classList.add('active'); ov.style.pointerEvents=''; inGame=false; }
+  else  { ov.style.pointerEvents='none'; inGame=true; }
 }
 
+// ── WebSocket ─────────────────────────────────────────────────────────────────
 function connect(onOpen){
-  if(ws&&ws.readyState<2)ws.close();
-  const proto=location.protocol==='https:'?'wss:':'ws:';
-  ws=new WebSocket(`${proto}//${location.host}/ws`);
-  ws.onopen=onOpen;
-  ws.onmessage=({data})=>{let msg;try{msg=JSON.parse(data);}catch{return;}handleMsg(msg);};
-  ws.onclose=()=>{if(inGame){inGame=false;showScreen('disconnected');}ws=null;};
-  ws.onerror=()=>{};
+  if(ws && ws.readyState<2) ws.close();
+  const proto = location.protocol==='https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+  ws.onopen   = onOpen;
+  ws.onmessage= ({data})=>{ let m; try{m=JSON.parse(data);}catch{return;} handleMsg(m); };
+  ws.onclose  = ()=>{ if(inGame){ inGame=false; showScreen('disconnected'); } ws=null; };
+  ws.onerror  = ()=>{};
 }
 
 function handleMsg(msg){
   switch(msg.type){
-    case 'hosted':document.getElementById('display-code').textContent=msg.code;showScreen('hosting');break;
-    case 'opponentJoined':beginGame('left');break;
-    case 'joined':beginGame('right');break;
-    case 'state':processState(msg);break;
-    case 'opponentLeft':inGame=false;showScreen('disconnected');break;
-    case 'error':document.getElementById('join-err').textContent=msg.msg||'Something went wrong.';break;
+    case 'hosted':         document.getElementById('display-code').textContent=msg.code; showScreen('hosting'); break;
+    case 'opponentJoined': beginGame('left');  break;
+    case 'joined':         beginGame('right'); break;
+    case 'state':          processState(msg);  break;
+    case 'opponentLeft':   inGame=false; showScreen('disconnected'); break;
+    case 'error':          document.getElementById('join-err').textContent=msg.msg||'Something went wrong.'; break;
   }
 }
 
 function beginGame(role){
-  myRole=role;gs=null;sentUp=false;sentDn=false;
-  cdScale=2.5;cdRot=0;cdAlpha=0;lastCi=-1;
-  lPop=1;rPop=1;lShk=0;rShk=0;lastLS=0;lastRS=0;
+  myRole=role; gs=null; sentUp=false; sentDn=false;
+  cdScale=2.5; cdRot=0; cdAlpha=0; lastCi=-1;
+  lPop=1; rPop=1; lShk=0; rShk=0; lastLS=0; lastRS=0;
+  stateBuf.length=0;
+  localPaddleY = VH/2 - PH/2;
   showScreen(null);
 }
 
 function processState(msg){
-  if(msg.ci!==lastCi){cdScale=2.5;cdRot=(Math.random()-.5)*.25;cdAlpha=0;lastCi=msg.ci;}
-  if(msg.ls>lastLS){lPop=2.2;lShk=.35;lastLS=msg.ls;}
-  if(msg.rs>lastRS){rPop=2.2;rShk=-.35;lastRS=msg.rs;}
-  gs=msg;
+  if(msg.ci !== lastCi){ cdScale=2.5; cdRot=(Math.random()-.5)*.25; cdAlpha=0; lastCi=msg.ci; }
+  if(msg.ls  > lastLS) { lPop=2.2; lShk= .35; lastLS=msg.ls; }
+  if(msg.rs  > lastRS) { rPop=2.2; rShk=-.35; lastRS=msg.rs; }
+
+  stateBuf.push({t: Date.now(), s: msg});
+  if(stateBuf.length > BUF_MAX) stateBuf.shift();
+
+  gs = msg;
+
+  reconcile(myRole==='left' ? msg.lp.y : msg.rp.y);
 }
 
-document.getElementById('btn-host').onclick=()=>connect(()=>ws.send(JSON.stringify({type:'host'})));
-document.getElementById('btn-go-join').onclick=()=>{
+// ── UI event handlers ─────────────────────────────────────────────────────────
+document.getElementById('btn-host').onclick    = ()=>connect(()=>ws.send(JSON.stringify({type:'host'})));
+document.getElementById('btn-go-join').onclick = ()=>{
   document.getElementById('join-err').textContent='';
   document.getElementById('code-input').value='';
   showScreen('joining');
-  setTimeout(()=>document.getElementById('code-input').focus(),60);
+  setTimeout(()=>document.getElementById('code-input').focus(), 60);
 };
-document.getElementById('btn-join').onclick=doJoin;
-document.getElementById('code-input').addEventListener('keydown',e=>{if(e.key==='Enter')doJoin();});
+document.getElementById('btn-join').onclick = doJoin;
+document.getElementById('code-input').addEventListener('keydown', e=>{ if(e.key==='Enter') doJoin(); });
 function doJoin(){
-  const code=document.getElementById('code-input').value.toUpperCase().trim();
+  const code = document.getElementById('code-input').value.toUpperCase().trim();
   document.getElementById('join-err').textContent='';
-  if(code.length!==4){document.getElementById('join-err').textContent='Code must be 4 characters.';return;}
-  connect(()=>ws.send(JSON.stringify({type:'join',code})));
+  if(code.length!==4){ document.getElementById('join-err').textContent='Code must be 4 characters.'; return; }
+  connect(()=>ws.send(JSON.stringify({type:'join', code})));
 }
-document.getElementById('btn-back').onclick=()=>{showScreen('menu');if(ws){ws.close();ws=null;}};
-document.getElementById('btn-cancel').onclick=()=>{showScreen('menu');if(ws){ws.close();ws=null;}};
-document.getElementById('btn-menu').onclick=()=>{showScreen('menu');gs=null;if(ws){ws.close();ws=null;}};
+document.getElementById('btn-back').onclick   = ()=>{ showScreen('menu');  if(ws){ws.close();ws=null;} };
+document.getElementById('btn-cancel').onclick = ()=>{ showScreen('menu');  if(ws){ws.close();ws=null;} };
+document.getElementById('btn-menu').onclick   = ()=>{ showScreen('menu');  gs=null; if(ws){ws.close();ws=null;} };
 
+// ── Animation helpers ─────────────────────────────────────────────────────────
 function tickAnimations(){
-  cdScale+=(1-cdScale)*.12;cdRot*=.9;cdAlpha+=(1-cdAlpha)*.12;
-  lPop+=(1-lPop)*.14;rPop+=(1-rPop)*.14;lShk*=.85;rShk*=.85;
-  if(gs){shakeX=(Math.random()-.5)*gs.shake;shakeY=(Math.random()-.5)*gs.shake;}
+  cdScale += (1-cdScale)*.12; cdRot*=.9; cdAlpha += (1-cdAlpha)*.12;
+  lPop   += (1-lPop)*.14;    rPop  += (1-rPop)*.14;
+  lShk   *= .85;              rShk  *= .85;
+  if(gs){ shakeX=(Math.random()-.5)*gs.shake; shakeY=(Math.random()-.5)*gs.shake; }
   if(!inGame){
-    demo.bx+=demo.bvx;demo.by+=demo.bvy;
-    if(demo.by<0)          {demo.by=0;       demo.bvy*=-1;}
-    if(demo.by+BS>VH)      {demo.by=VH-BS;   demo.bvy*=-1;}
-    if(demo.bx<70)         {demo.bx=70;      demo.bvx=Math.abs(demo.bvx);}
-    if(demo.bx+BS>VW-70)   {demo.bx=VW-70-BS;demo.bvx=-Math.abs(demo.bvx);}
+    demo.bx+=demo.bvx; demo.by+=demo.bvy;
+    if(demo.by<0)         { demo.by=0;        demo.bvy*=-1; }
+    if(demo.by+BS>VH)     { demo.by=VH-BS;    demo.bvy*=-1; }
+    if(demo.bx<70)        { demo.bx=70;       demo.bvx=Math.abs(demo.bvx); }
+    if(demo.bx+BS>VW-70)  { demo.bx=VW-70-BS; demo.bvx=-Math.abs(demo.bvx); }
     const t=demo.by+BS/2-PH/2;
-    demo.ly+=(t-demo.ly)*.045;demo.ry+=(t-demo.ry)*.045;
+    demo.ly+=(t-demo.ly)*.045; demo.ry+=(t-demo.ry)*.045;
   }
 }
 
+// ── Draw ──────────────────────────────────────────────────────────────────────
 function drawScore(score,x,y,scale,rot){
-  ctx.save();ctx.translate(x,y);ctx.rotate(rot);ctx.scale(scale,scale);
-  ctx.font='90px "Pixelify Sans",monospace';ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.lineWidth=10;ctx.strokeStyle='#000';ctx.strokeText(score,0,0);
-  ctx.fillStyle='#fff';ctx.fillText(score,0,0);ctx.restore();
+  ctx.save(); ctx.translate(x,y); ctx.rotate(rot); ctx.scale(scale,scale);
+  ctx.font='90px "Pixelify Sans",monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.lineWidth=10; ctx.strokeStyle='#000'; ctx.strokeText(score,0,0);
+  ctx.fillStyle='#fff'; ctx.fillText(score,0,0); ctx.restore();
 }
+
 function drawCountdown(text,color){
-  ctx.save();ctx.translate(VW/2,VH/2-20);ctx.rotate(cdRot);ctx.scale(cdScale,cdScale);
-  ctx.globalAlpha=cdAlpha;ctx.font='140px "Pixelify Sans",monospace';
-  ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=16;
-  ctx.strokeStyle='#000';ctx.strokeText(text,0,0);
-  ctx.shadowBlur=40;ctx.shadowColor=color;ctx.fillStyle=color;ctx.fillText(text,0,0);ctx.restore();
-}
-function drawLobby(){
-  const sx=canvas.width/VW,sy=canvas.height/VH;
-  ctx.fillStyle='#000';ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.save();ctx.setTransform(sx,0,0,sy,0,0);
-  ctx.fillStyle='rgba(255,255,255,.07)';
-  for(let y=0;y<VH;y+=40)ctx.fillRect(VW/2-5,y,10,20);
-  ctx.fillStyle='rgba(255,255,255,.12)';
-  ctx.fillRect(50,demo.ly,PW,PH);ctx.fillRect(VW-70,demo.ry,PW,PH);
-  ctx.fillStyle='rgba(255,255,255,.18)';ctx.fillRect(demo.bx,demo.by,BS,BS);
-  ctx.restore();
-}
-function drawGameFrame(){
-  if(!gs)return;
-  const sx=canvas.width/VW,sy=canvas.height/VH;
-  ctx.fillStyle='#000';ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.save();ctx.setTransform(sx,0,0,sy,shakeX*sx,shakeY*sy);
-  ctx.fillStyle='#fff';
-  for(let y=0;y<VH;y+=40)ctx.fillRect(VW/2-5,y,10,20);
-  ctx.fillRect(gs.lp.x,gs.lp.y,PW,PH);ctx.fillRect(gs.rp.x,gs.rp.y,PW,PH);
-  ctx.fillRect(gs.ball.x,gs.ball.y,BS,BS);
-  const lx=VW/2-120+lShk*10,rx=VW/2+120+rShk*10;
-  drawScore(gs.ls,lx,90,lPop,lShk*.03);drawScore(gs.rs,rx,90,rPop,rShk*.03);
-  ctx.font='20px "Pixelify Sans",monospace';ctx.textAlign='center';ctx.textBaseline='top';
-  ctx.fillStyle='rgba(255,255,255,.3)';
-  if(myRole==='left') ctx.fillText('YOU',lx,148);
-  if(myRole==='right')ctx.fillText('YOU',rx,148);
-  if(gs.phase==='countdown')drawCountdown(gs.ct,gs.cc);
-  ctx.restore();
-  if(gs.flash>.01){
-    ctx.save();ctx.fillStyle=`rgba(255,255,255,${gs.flash*.55})`;
-    ctx.fillRect(0,0,canvas.width,canvas.height);ctx.restore();
-  }
-  ctx.save();ctx.font='15px "Pixelify Sans",monospace';
-  ctx.fillStyle='rgba(255,255,255,.22)';ctx.textBaseline='bottom';
-  const hy=canvas.height-18;
-  if(myRole==='left') {ctx.textAlign='left'; ctx.fillText('W / S',24,hy);}
-  else                {ctx.textAlign='right';ctx.fillText('↑ / ↓',canvas.width-24,hy);}
+  ctx.save(); ctx.translate(VW/2,VH/2-20); ctx.rotate(cdRot); ctx.scale(cdScale,cdScale);
+  ctx.globalAlpha=cdAlpha; ctx.font='140px "Pixelify Sans",monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.lineWidth=16;
+  ctx.strokeStyle='#000'; ctx.strokeText(text,0,0);
+  ctx.shadowBlur=40; ctx.shadowColor=color; ctx.fillStyle=color; ctx.fillText(text,0,0);
   ctx.restore();
 }
 
+function drawLobby(){
+  const sx=canvas.width/VW, sy=canvas.height/VH;
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.save(); ctx.setTransform(sx,0,0,sy,0,0);
+  ctx.fillStyle='rgba(255,255,255,.07)';
+  for(let y=0;y<VH;y+=40) ctx.fillRect(VW/2-5,y,10,20);
+  ctx.fillStyle='rgba(255,255,255,.12)';
+  ctx.fillRect(50,demo.ly,PW,PH); ctx.fillRect(VW-70,demo.ry,PW,PH);
+  ctx.fillStyle='rgba(255,255,255,.18)'; ctx.fillRect(demo.bx,demo.by,BS,BS);
+  ctx.restore();
+}
+
+function drawGameFrame(){
+  if(!gs) return;
+
+  const interp = getInterp() || {lp:gs.lp, rp:gs.rp, ball:gs.ball};
+
+  // Client-side prediction: override own paddle with locally-predicted Y
+  const lpY = myRole==='left'  ? localPaddleY : interp.lp.y;
+  const rpY = myRole==='right' ? localPaddleY : interp.rp.y;
+
+  const sx=canvas.width/VW, sy=canvas.height/VH;
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.save(); ctx.setTransform(sx,0,0,sy, shakeX*sx, shakeY*sy);
+  ctx.fillStyle='#fff';
+  for(let y=0;y<VH;y+=40) ctx.fillRect(VW/2-5,y,10,20);
+  ctx.fillRect(interp.lp.x, lpY, PW, PH);
+  ctx.fillRect(interp.rp.x, rpY, PW, PH);
+  ctx.fillRect(interp.ball.x, interp.ball.y, BS, BS);
+
+  const lx=VW/2-120+lShk*10, rx=VW/2+120+rShk*10;
+  drawScore(gs.ls, lx, 90, lPop, lShk*.03);
+  drawScore(gs.rs, rx, 90, rPop, rShk*.03);
+  ctx.font='20px "Pixelify Sans",monospace'; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillStyle='rgba(255,255,255,.3)';
+  if(myRole==='left')  ctx.fillText('YOU',lx,148);
+  if(myRole==='right') ctx.fillText('YOU',rx,148);
+  if(gs.phase==='countdown') drawCountdown(gs.ct, gs.cc);
+  ctx.restore();
+
+  if(gs.flash>.01){
+    ctx.save(); ctx.fillStyle=`rgba(255,255,255,${gs.flash*.55})`;
+    ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
+  }
+  ctx.save(); ctx.font='15px "Pixelify Sans",monospace';
+  ctx.fillStyle='rgba(255,255,255,.22)'; ctx.textBaseline='bottom';
+  const hy=canvas.height-18;
+  if(myRole==='left') { ctx.textAlign='left';  ctx.fillText('W / S',24,hy); }
+  else                { ctx.textAlign='right'; ctx.fillText('↑ / ↓',canvas.width-24,hy); }
+  ctx.restore();
+}
+
+// ── Main loop ─────────────────────────────────────────────────────────────────
 function loop(){
+  stepLocalPaddle();
   tickAnimations();
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  if(inGame)drawGameFrame();else drawLobby();
+  if(inGame) drawGameFrame(); else drawLobby();
   requestAnimationFrame(loop);
 }
 showScreen('menu');
