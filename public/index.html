@@ -64,32 +64,38 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;font-f
 </div>
 <script>
 'use strict';
+// ── Constants (must match server) ──────────────────────────────────────────────
 const VW=1280,VH=720,PW=20,PH=140,BS=18,PS=10;
-const LP_X=50, RP_X=VW-70;
+const LP_X=50, RP_X=VW-70; // paddle x positions are constant
 const CD_TEXTS  = ['3','2','1','GO'];
 const CD_COLORS = ['lime','yellow','red','red'];
 
-const INTERP_MS      = 100;
-const RECONCILE_SNAP = 80;
-const RECONCILE_LERP = 0.25;
+// ── Lag tunables ───────────────────────────────────────────────────────────────
+const INTERP_MS      = 100;  // render this many ms behind for smooth interpolation
+const RECONCILE_SNAP = 80;   // hard-snap threshold (px)
+const RECONCILE_LERP = 0.25; // soft-correction rate per frame
 
+// ── Input ──────────────────────────────────────────────────────────────────────
 const keys  = new Set();
-const touch = {up:false, down:false};
+const touch = {up:false, down:false}; // from touch events
 const isMob = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
+// Binary input buffer (2 bytes, reused)
 const inputBuf  = new Uint8Array(2);
 inputBuf[0] = 0xA1;
-let sentFlags = -1;
+let sentFlags = -1; // last sent flags, -1 forces first send
 
+// ── Canvas ─────────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 
-let dashCanvas = null;
+// Offscreen canvas for the static center dashes (redrawn only on resize)
+let dashCanvas = null, dashW = 0, dashH = 0;
 
 function buildDashCanvas() {
   dashCanvas = document.createElement('canvas');
-  dashCanvas.width  = canvas.width;
-  dashCanvas.height = canvas.height;
+  dashCanvas.width  = dashW = canvas.width;
+  dashCanvas.height = dashH = canvas.height;
   const dc  = dashCanvas.getContext('2d');
   const sx  = canvas.width  / VW;
   const sy  = canvas.height / VH;
@@ -106,15 +112,19 @@ function resize() {
 }
 window.addEventListener('resize', resize); resize();
 
+// ── Network state ──────────────────────────────────────────────────────────────
 let ws=null, myRole=null, inGame=false;
+
+// Latest decoded server state (for scores/phase/shake/flash — not interpolated)
 let gs = null;
 
+// Interpolation buffer: fixed-size ring with typed arrays for zero GC
 const BUF = 64;
-const ibT  = new Float64Array(BUF);
-const ibBx = new Float32Array(BUF);
-const ibBy = new Float32Array(BUF);
-const ibLy = new Float32Array(BUF);
-const ibRy = new Float32Array(BUF);
+const ibT  = new Float64Array(BUF); // wall-clock arrival ms
+const ibBx = new Float32Array(BUF); // ball.x
+const ibBy = new Float32Array(BUF); // ball.y
+const ibLy = new Float32Array(BUF); // leftPaddle.y
+const ibRy = new Float32Array(BUF); // rightPaddle.y
 let ibHead = 0, ibSize = 0;
 
 function ibPush(t,bx,by,ly,ry) {
@@ -124,12 +134,13 @@ function ibPush(t,bx,by,ly,ry) {
   if(ibSize<BUF) ibSize++;
 }
 
-function ibGet(idx) {
+function ibGet(idx) { // idx 0=oldest … ibSize-1=newest
   const i=(ibHead - ibSize + idx + BUF*2)%BUF;
   return {t:ibT[i],bx:ibBx[i],by:ibBy[i],ly:ibLy[i],ry:ibRy[i]};
 }
 
-let localY = VH/2 - PH/2;
+// ── Client-side prediction ──────────────────────────────────────────────────────
+let localY = VH/2 - PH/2; // own paddle Y, predicted locally
 
 function stepLocal() {
   if(!inGame || !gs) return;
@@ -146,6 +157,8 @@ function reconcile(serverY) {
   else localY += d * RECONCILE_LERP;
 }
 
+// ── Entity interpolation ────────────────────────────────────────────────────────
+// Scratch object reused every frame — zero allocation
 const IPOS = {bx:VW/2,by:VH/2,ly:VH/2-PH/2,ry:VH/2-PH/2};
 
 function calcInterp() {
@@ -154,6 +167,7 @@ function calcInterp() {
     const e=ibGet(0); IPOS.bx=e.bx;IPOS.by=e.by;IPOS.ly=e.ly;IPOS.ry=e.ry; return;
   }
   const rt = Date.now() - INTERP_MS;
+  // binary-search for the entry just <= rt
   let lo=0, hi=ibSize-1;
   while(lo<hi-1) {
     const mid=(lo+hi)>>1;
@@ -166,22 +180,27 @@ function calcInterp() {
   IPOS.ly=a.ly+(b.ly-a.ly)*t; IPOS.ry=a.ry+(b.ry-a.ry)*t;
 }
 
+// ── Input sending ───────────────────────────────────────────────────────────────
 function sendInput() {
   if(!ws||ws.readyState!==1||!inGame) return;
   const up   = keys.has(myRole==='left'?'w':'arrowup')   || touch.up;
   const down = keys.has(myRole==='left'?'s':'arrowdown') || touch.down;
   const flags = (up?1:0) | (down?2:0);
-  if(flags === sentFlags) return;
+  if(flags === sentFlags) return; // delta: only send on change
   sentFlags = flags;
   inputBuf[1] = flags;
-  ws.send(inputBuf.buffer.slice(0,2));
+  ws.send(inputBuf.buffer.slice(0,2)); // copy 2 bytes
 }
 
+// ── Binary state decoding ───────────────────────────────────────────────────────
+// Reusable decoded-state object (zero allocation per packet)
 const DS = {bx:0,by:0,ly:0,ry:0,ls:0,rs:0,playing:false,ci:0,shake:0,flash:0};
 let lastCi=-1, lastLS=0, lastRS=0;
 
+// Animation state
 let cdScale=1,cdRot=0,cdAlpha=1;
 let lPop=1,rPop=1,lShk=0,rShk=0;
+let shakeX=0,shakeY=0;
 
 function decodeState(buf) {
   const v = new DataView(buf);
@@ -200,14 +219,18 @@ function decodeState(buf) {
 
 function onState(buf) {
   decodeState(buf);
-  ibPush(Date.now(), DS.bx, DS.by, DS.ly, DS.ry);
+  const now = Date.now();
+  ibPush(now, DS.bx, DS.by, DS.ly, DS.ry);
   gs = DS;
+
   if(DS.ci!==lastCi){ cdScale=2.5;cdRot=(Math.random()-.5)*.25;cdAlpha=0;lastCi=DS.ci; }
   if(DS.ls>lastLS)  { lPop=2.2;lShk= .35;lastLS=DS.ls; }
   if(DS.rs>lastRS)  { rPop=2.2;rShk=-.35;lastRS=DS.rs; }
+
   reconcile(myRole==='left'?DS.ly:DS.ry);
 }
 
+// ── Screen management ───────────────────────────────────────────────────────────
 function show(id) {
   document.querySelectorAll('.sc').forEach(s=>s.classList.remove('on'));
   const ov=document.getElementById('ov');
@@ -215,11 +238,12 @@ function show(id) {
   else  { ov.style.pointerEvents='none'; inGame=true; }
 }
 
+// ── WebSocket ───────────────────────────────────────────────────────────────────
 function connect(cb) {
   if(ws&&ws.readyState<2) ws.close();
   const proto=location.protocol==='https:'?'wss:':'ws:';
   ws=new WebSocket(`${proto}//${location.host}/ws`);
-  ws.binaryType='arraybuffer';
+  ws.binaryType='arraybuffer'; // receive binary as ArrayBuffer
   ws.onopen=cb;
   ws.onmessage=({data})=>{
     if(data instanceof ArrayBuffer){ onState(data); return; }
@@ -245,6 +269,7 @@ function beginGame(role) {
   show(null);
 }
 
+// ── UI handlers ─────────────────────────────────────────────────────────────────
 document.getElementById('bH').onclick = ()=>connect(()=>ws.send(JSON.stringify({type:'host'})));
 document.getElementById('bJ').onclick = ()=>{
   document.getElementById('je').textContent='';
@@ -264,10 +289,13 @@ document.getElementById('bB').onclick=()=>{ show('sm'); if(ws){ws.close();ws=nul
 document.getElementById('bC').onclick=()=>{ show('sm'); if(ws){ws.close();ws=null;} };
 document.getElementById('bM').onclick=()=>{ show('sm'); gs=null; if(ws){ws.close();ws=null;} };
 
+// ── Keyboard ────────────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{ keys.add(e.key.toLowerCase()); sendInput(); });
 document.addEventListener('keyup',  e=>{ keys.delete(e.key.toLowerCase()); sendInput(); });
 
-const activeTouches = new Map();
+// ── Touch controls ──────────────────────────────────────────────────────────────
+// Upper half = up, lower half = down. Multi-touch aware.
+const activeTouches = new Map(); // id → clientY
 
 function processTouches() {
   let up=false, down=false;
@@ -295,6 +323,7 @@ canvas.addEventListener('touchmove',  onTouchMove,  {passive:false});
 canvas.addEventListener('touchend',   onTouchEnd,   {passive:false});
 canvas.addEventListener('touchcancel',onTouchEnd,   {passive:false});
 
+// ── Demo animation (lobby background) ─────────────────────────────────────────
 const demo={bx:VW/2,by:VH/2,bvx:5.2,bvy:3.8,ly:VH/2-PH/2,ry:VH/2-PH/2};
 
 function tickDemo() {
@@ -307,6 +336,7 @@ function tickDemo() {
   demo.ly+=(ty-demo.ly)*.045; demo.ry+=(ty-demo.ry)*.045;
 }
 
+// ── Render helpers (no allocations) ────────────────────────────────────────────
 function drawScore(score,x,y,scale,rot) {
   ctx.save(); ctx.translate(x,y); ctx.rotate(rot); ctx.scale(scale,scale);
   ctx.lineWidth=10; ctx.strokeStyle='#000'; ctx.strokeText(score,0,0);
@@ -323,6 +353,7 @@ function drawCountdown(text,color) {
   ctx.restore();
 }
 
+// ── Main render ─────────────────────────────────────────────────────────────────
 function drawLobby() {
   const cw=canvas.width, ch=canvas.height;
   ctx.fillStyle='#000'; ctx.fillRect(0,0,cw,ch);
@@ -338,34 +369,50 @@ function drawLobby() {
 function drawGame() {
   if(!gs) return;
   calcInterp();
+
   const cw=canvas.width, ch=canvas.height, sx=cw/VW, sy=ch/VH;
   const sk=gs.shake;
   const ox=sk?(Math.random()-.5)*sk*sx:0;
   const oy=sk?(Math.random()-.5)*sk*sy:0;
+
   ctx.fillStyle='#000'; ctx.fillRect(0,0,cw,ch);
   ctx.save(); ctx.translate(ox,oy);
+
   if(dashCanvas) ctx.drawImage(dashCanvas,0,0);
+
+  // Paddles — own paddle uses local prediction, opponent uses interpolated
   const lpY = (myRole==='left'  ? localY : IPOS.ly) * sy;
   const rpY = (myRole==='right' ? localY : IPOS.ry) * sy;
   ctx.fillStyle='#fff';
   ctx.fillRect(LP_X*sx, lpY, PW*sx, PH*sy);
   ctx.fillRect(RP_X*sx, rpY, PW*sx, PH*sy);
   ctx.fillRect(IPOS.bx*sx, IPOS.by*sy, BS*sx, BS*sy);
+
+  // Scores
   const lx=(VW/2-120+lShk*10)*sx, rx=(VW/2+120+rShk*10)*sx, sy2=90*sy;
   ctx.font=`${90*sy}px "Pixelify Sans",monospace`;
   ctx.textAlign='center'; ctx.textBaseline='middle';
   drawScore(gs.ls, lx, sy2, lPop, lShk*.03);
   drawScore(gs.rs, rx, sy2, rPop, rShk*.03);
+
+  // "YOU" label
   ctx.font=`${20*sy}px "Pixelify Sans",monospace`;
   ctx.textBaseline='top'; ctx.fillStyle='rgba(255,255,255,.3)';
   if(myRole==='left')  ctx.fillText('YOU',lx,148*sy);
   if(myRole==='right') ctx.fillText('YOU',rx,148*sy);
+
+  // Countdown
   if(!gs.playing) drawCountdown(CD_TEXTS[gs.ci], CD_COLORS[gs.ci]);
+
   ctx.restore();
+
+  // Flash overlay (no translate)
   if(gs.flash>.01){
     ctx.fillStyle=`rgba(255,255,255,${gs.flash*.55})`;
     ctx.fillRect(0,0,cw,ch);
   }
+
+  // Controls hint
   ctx.font=`${Math.round(15*Math.min(sx,sy))}px "Pixelify Sans",monospace`;
   ctx.fillStyle='rgba(255,255,255,.22)'; ctx.textBaseline='bottom';
   const hy=ch-16;
@@ -376,10 +423,13 @@ function drawGame() {
     ctx.textAlign='right';
     ctx.fillText(isMob?'TAP TOP / BOTTOM':'↑ / ↓', cw-20, hy);
   }
+
+  // Mobile touch zone indicators (subtle)
   if(isMob && inGame) {
     ctx.fillStyle='rgba(255,255,255,.04)';
-    ctx.fillRect(0,0,cw,ch/2);
-    ctx.fillRect(0,ch/2,cw,ch/2);
+    ctx.fillRect(0,0,cw,ch/2);            // top zone
+    ctx.fillStyle='rgba(255,255,255,.04)';
+    ctx.fillRect(0,ch/2,cw,ch/2);         // bottom zone
     ctx.font=`${Math.round(22*Math.min(sx,sy))}px "Pixelify Sans",monospace`;
     ctx.fillStyle='rgba(255,255,255,.12)'; ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText('▲', cw/2, ch/4);
@@ -387,6 +437,7 @@ function drawGame() {
   }
 }
 
+// ── Main loop ───────────────────────────────────────────────────────────────────
 function tickAnimations() {
   cdScale+=(1-cdScale)*.12; cdRot*=.9; cdAlpha+=(1-cdAlpha)*.12;
   lPop+=(1-lPop)*.14; rPop+=(1-rPop)*.14;
@@ -394,7 +445,7 @@ function tickAnimations() {
 }
 
 function loop() {
-  stepLocal();
+  stepLocal();        // client-side prediction every frame
   tickAnimations();
   if(!inGame) tickDemo();
   ctx.clearRect(0,0,canvas.width,canvas.height);
