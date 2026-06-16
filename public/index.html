@@ -351,4 +351,59 @@ function drawGame() {
   ctx.fillRect(LP_X*sx, lpY, PW*sx, PH*sy);
   ctx.fillRect(RP_X*sx, rpY, PW*sx, PH*sy);
   ctx.fillRect(IPOS.bx*sx, IPOS.by*sy, BS*sx, BS*sy);
-  const lx=(VW/2-120+lShk*
+  const lx=(VW/2-120+lShk*10)*sx, rx=(VW/2+120+rShk*10)*sx, sy2=90*sy;
+  ctx.font=`${90*sy}px "Pixelify Sans",monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  drawScore(gs.ls, lx, sy2, lPop, lShk*.03);
+  drawScore(gs.rs, rx, sy2, rPop, rShk*.03);
+  ctx.font=`${20*sy}px "Pixelify Sans",monospace`;
+  ctx.textBaseline='top'; ctx.fillStyle='rgba(255,255,255,.3)';
+  if(myRole==='left')  ctx.fillText('YOU',lx,148*sy);
+  if(myRole==='right') ctx.fillText('YOU',rx,148*sy);
+  if(!gs.playing) drawCountdown(CD_TEXTS[gs.ci], CD_COLORS[gs.ci]);
+  ctx.restore();
+  if(gs.flash>.01){
+    ctx.fillStyle=`rgba(255,255,255,${gs.flash*.55})`;
+    ctx.fillRect(0,0,cw,ch);
+  }
+  ctx.font=`${Math.round(15*Math.min(sx,sy))}px "Pixelify Sans",monospace`;
+  ctx.fillStyle='rgba(255,255,255,.22)'; ctx.textBaseline='bottom';
+  const hy=ch-16;
+  if(myRole==='left') {
+    ctx.textAlign='left';
+    ctx.fillText(isMob?'TAP TOP / BOTTOM':'W / S', 20, hy);
+  } else {
+    ctx.textAlign='right';
+    ctx.fillText(isMob?'TAP TOP / BOTTOM':'↑ / ↓', cw-20, hy);
+  }
+  if(isMob && inGame) {
+    ctx.fillStyle='rgba(255,255,255,.04)';
+    ctx.fillRect(0,0,cw,ch/2);
+    ctx.fillRect(0,ch/2,cw,ch/2);
+    ctx.font=`${Math.round(22*Math.min(sx,sy))}px "Pixelify Sans",monospace`;
+    ctx.fillStyle='rgba(255,255,255,.12)'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('▲', cw/2, ch/4);
+    ctx.fillText('▼', cw/2, ch*3/4);
+  }
+}
+
+function tickAnimations() {
+  cdScale+=(1-cdScale)*.12; cdRot*=.9; cdAlpha+=(1-cdAlpha)*.12;
+  lPop+=(1-lPop)*.14; rPop+=(1-rPop)*.14;
+  lShk*=.85; rShk*=.85;
+}
+
+function loop() {
+  stepLocal();
+  tickAnimations();
+  if(!inGame) tickDemo();
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(inGame) drawGame(); else drawLobby();
+  requestAnimationFrame(loop);
+}
+
+show('sm');
+loop();
+</script>
+</body>
+</html>
