@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PONG</title>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#000; font-family:'Pixelify Sans',monospace; color:#fff; }
+#game { display:block; position:fixed; inset:0; width:100%; height:100%; }
+#overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:20; pointer-events:none; }
+.screen { display:none; flex-direction:column; align-items:center; gap:28px; pointer-events:all; text-align:center; padding:24px; }
+.screen.active { display:flex; }
+.title { font-size:clamp(70px,13vw,130px); font-weight:700; letter-spacing:10px; text-shadow:0 0 60px rgba(255,255,255,.35); margin:0; line-height:1; }
+.label { font-size:clamp(13px,2vw,18px); letter-spacing:4px; opacity:.45; margin:0; }
+.btn { font-family:'Pixelify Sans',monospace; font-size:clamp(20px,3vw,30px); font-weight:700; letter-spacing:4px; padding:18px 56px; background:transparent; color:#fff; border:3px solid #fff; cursor:pointer; outline:none; transition:background .08s,color .08s; min-width:280px; }
+.btn:hover,.btn:focus { background:#fff; color:#000; }
+.btn-ghost { font-family:'Pixelify Sans',monospace; font-size:clamp(14px,1.8vw,19px); font-weight:400; letter-spacing:3px; padding:10px 32px; background:transparent; color:rgba(255,255,255,.4); border:2px solid rgba(255,255,255,.2); cursor:pointer; outline:none; transition:color .08s,border-color .08s; }
+.btn-ghost:hover,.btn-ghost:focus { color:#fff; border-color:rgba(255,255,255,.7); }
+.room-code { font-size:clamp(62px,11vw,112px); font-weight:700; letter-spacing:20px; padding:20px 48px 20px 68px; border:3px solid rgba(255,255,255,.25); background:rgba(255,255,255,.04); margin:0; text-shadow:0 0 30px rgba(255,255,255,.6); cursor:default; user-select:all; }
+.code-input { font-family:'Pixelify Sans',monospace; font-size:clamp(48px,8.5vw,84px); font-weight:700; letter-spacing:18px; text-align:center; background:transparent; border:none; border-bottom:3px solid #fff; color:#fff; width:min(360px,82vw); padding:8px 0 8px 18px; outline:none; text-transform:uppercase; caret-color:rgba(255,255,255,.6); }
+.code-input::placeholder { opacity:.18; letter-spacing:16px; }
+.err { font-size:16px; color:#ff5555; letter-spacing:2px; min-height:22px; margin:-12px 0; }
+.waiting { font-size:clamp(15px,2.2vw,21px); letter-spacing:3px; opacity:.7; animation:pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:.9} }
+.controls-hint { font-size:14px; letter-spacing:3px; opacity:.3; margin-top:4px; }
+.btn-stack { display:flex; flex-direction:column; align-items:center; gap:18px; }
+.title-red { text-shadow:0 0 50px rgba(255,60,60,.55); color:#fff; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="overlay">
+  <div id="screen-menu" class="screen active">
+    <h1 class="title">PONG</h1>
+    <div class="btn-stack" style="margin-top:12px">
+      <button class="btn" id="btn-host">HOST GAME</button>
+      <button class="btn" id="btn-go-join">JOIN GAME</button>
+    </div>
+  </div>
+  <div id="screen-hosting" class="screen">
+    <p class="label">ROOM CODE</p>
+    <p class="room-code" id="display-code">----</p>
+    <p class="waiting">Waiting for opponent...</p>
+    <p class="controls-hint">YOU ARE LEFT PLAYER &nbsp;·&nbsp; W / S TO MOVE</p>
+    <button class="btn-ghost" id="btn-cancel">CANCEL</button>
+  </div>
+  <div id="screen-joining" class="screen">
+    <h1 class="title" style="font-size:clamp(42px,7vw,80px);letter-spacing:6px">JOIN GAME</h1>
+    <p class="label" style="margin-top:-8px">ENTER ROOM CODE</p>
+    <input class="code-input" id="code-input" maxlength="4" placeholder="XXXX" autocomplete="off" autocorrect="off" spellcheck="false" />
+    <p class="err" id="join-err"></p>
+    <div class="btn-stack">
+      <button class="btn" id="btn-join">JOIN</button>
+      <button class="btn-ghost" id="btn-back">BACK</button>
+    </div>
+    <p class="controls-hint">YOU ARE RIGHT PLAYER &nbsp;·&nbsp; ↑ / ↓ TO MOVE</p>
+  </div>
+  <div id="screen-disconnected" class="screen">
+    <h1 class="title title-red" style="font-size:clamp(38px,6.5vw,76px);line-height:1.2">OPPONENT<br>LEFT</h1>
+    <button class="btn" id="btn-menu">MAIN MENU</button>
+  </div>
+</div>
+<script>
+const VW=1280,VH=720,PW=20,PH=140,BS=18;
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
+window.addEventListener('resize',resize);resize();
+
+let ws=null,myRole=null,inGame=false,gs=null;
+let cdScale=1,cdRot=0,cdAlpha=1,lastCi=-1;
+let lPop=1,rPop=1,lShk=0,rShk=0,lastLS=0,lastRS=0;
+let shakeX=0,shakeY=0;
+const demo={bx:VW/2,by:VH/2,bvx:5.2,bvy:3.8,ly:VH/2-PH/2,ry:VH/2-PH/2};
+const keys={};let sentUp=false,sentDn=false;
+
+document.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;sendInput();});
+document.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;sendInput();});
+
+function sendInput(){
+  if(!ws||ws.readyState!==1||!inGame)return;
+  const up=!!(myRole==='left'?keys['w']:keys['arrowup']);
+  const down=!!(myRole==='left'?keys['s']:keys['arrowdown']);
+  if(up!==sentUp||down!==sentDn){ws.send(JSON.stringify({type:'input',up,down}));sentUp=up;sentDn=down;}
+}
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  if(id){document.getElementById('screen-'+id).classList.add('active');document.getElementById('overlay').style.pointerEvents='';inGame=false;}
+  else{document.getElementById('overlay').style.pointerEvents='none';inGame=true;}
+}
+
+function connect(onOpen){
+  if(ws&&ws.readyState<2)ws.close();
+  const proto=location.protocol==='https:'?'wss:':'ws:';
+  ws=new WebSocket(`${proto}//${location.host}/ws`);
+  ws.onopen=onOpen;
+  ws.onmessage=({data})=>{let msg;try{msg=JSON.parse(data);}catch{return;}handleMsg(msg);};
+  ws.onclose=handleClose;ws.onerror=()=>{};
+}
+
+function handleClose(){if(inGame){inGame=false;showScreen('disconnected');}ws=null;}
+
+function handleMsg(msg){
+  switch(msg.type){
+    case 'hosted':document.getElementById('display-code').textContent=msg.code;showScreen('hosting');break;
+    case 'opponentJoined':beginGame('left');break;
+    case 'joined':beginGame('right');break;
+    case 'state':processState(msg);break;
+    case 'opponentLeft':inGame=false;showScreen('disconnected');break;
+    case 'error':document.getElementById('join-err').textContent=msg.msg||'Something went wrong.';break;
+  }
+}
+
+function beginGame(role){
+  myRole=role;gs=null;sentUp=false;sentDn=false;
+  cdScale=2.5;cdRot=0;cdAlpha=0;lastCi=-1;
+  lPop=1;rPop=1;lShk=0;rShk=0;lastLS=0;lastRS=0;
+  showScreen(null);
+}
+
+function processState(msg){
+  if(msg.ci!==lastCi){cdScale=2.5;cdRot=(Math.random()-.5)*.25;cdAlpha=0;lastCi=msg.ci;}
+  if(msg.ls>lastLS){lPop=2.2;lShk=.35;lastLS=msg.ls;}
+  if(msg.rs>lastRS){rPop=2.2;rShk=-.35;lastRS=msg.rs;}
+  gs=msg;
+}
+
+document.getElementById('btn-host').onclick=()=>connect(()=>ws.send(JSON.stringify({type:'host'})));
+document.getElementById('btn-go-join').onclick=()=>{
+  document.getElementById('join-err').textContent='';
+  document.getElementById('code-input').value='';
+  showScreen('joining');
+  setTimeout(()=>document.getElementById('code-input').focus(),60);
+};
+document.getElementById('btn-join').onclick=doJoin;
+document.getElementById('code-input').addEventListener('keydown',e=>{if(e.key==='Enter')doJoin();});
+function doJoin(){
+  const code=document.getElementById('code-input').value.toUpperCase().trim();
+  document.getElementById('join-err').textContent='';
+  if(code.length!==4){document.getElementById('join-err').textContent='Code must be 4 characters.';return;}
+  connect(()=>ws.send(JSON.stringify({type:'join',code})));
+}
+document.getElementById('btn-back').onclick=()=>{showScreen('menu');if(ws){ws.close();ws=null;}};
+document.getElementById('btn-cancel').onclick=()=>{showScreen('menu');if(ws){ws.close();ws=null;}};
+document.getElementById('btn-menu').onclick=()=>{showScreen('menu');gs=null;if(ws){ws.close();ws=null;}};
+
+function tickAnimations(){
+  cdScale+=(1-cdScale)*.12;cdRot*=.9;cdAlpha+=(1-cdAlpha)*.12;
+  lPop+=(1-lPop)*.14;rPop+=(1-rPop)*.14;lShk*=.85;rShk*=.85;
+  if(gs){shakeX=(Math.random()-.5)*gs.shake;shakeY=(Math.random()-.5)*gs.
+  shake;}
+  if(!inGame){
+    demo.bx+=demo.bvx;demo.by+=demo.bvy;
+    if(demo.by<0){demo.by=0;demo.bvy*=-1;}
+    if(demo.by+BS>VH){demo.by=VH-BS;demo.bvy*=-1;}
+    if(demo.bx<70){demo.bx=70;demo.bvx=Math.abs(demo.bvx);}
+    if(demo.bx+BS>VW-70){demo.bx=VW-70-BS;demo.bvx=-Math.abs(demo.bvx);}
+    const t=demo.by+BS/2-PH/2;
+    demo.ly+=(t-demo.ly)*.045;demo.ry+=(t-demo.ry)*.045;
+  }
+}
+
+function drawScore(score,x,y,scale,rot){
+  ctx.save();ctx.translate(x,y);ctx.rotate(rot);ctx.scale(scale,scale);
+  ctx.font='90px "Pixelify Sans",monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.lineWidth=10;ctx.strokeStyle='#000';ctx.strokeText(score,0,0);
+  ctx.fillStyle='#fff';ctx.fillText(score,0,0);ctx.restore();
+}
+
+function drawCountdown(text,color){
+  ctx.save();ctx.translate(VW/2,VH/2-20);ctx.rotate(cdRot);ctx.scale(cdScale,cdScale);
+  ctx.globalAlpha=cdAlpha;ctx.font='140px "Pixelify Sans",monospace';
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=16;
+  ctx.strokeStyle='#000';ctx.strokeText(text,0,0);
+  ctx.shadowBlur=40;ctx.shadowColor=color;ctx.fillStyle=color;ctx.fillText(text,0,0);ctx.restore();
+}
+
+function drawLobby(){
+  const sx=canvas.width/VW,sy=canvas.height/VH;
+  ctx.fillStyle='#000';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.save();ctx.setTransform(sx,0,0,sy,0,0);
+  ctx.fillStyle='rgba(255,255,255,.07)';
+  for(let y=0;y<VH;y+=40)ctx.fillRect(VW/2-5,y,10,20);
+  ctx.fillStyle='rgba(255,255,255,.12)';
+  ctx.fillRect(50,demo.ly,PW,PH);ctx.fillRect(VW-70,demo.ry,PW,PH);
+  ctx.fillStyle='rgba(255,255,255,.18)';ctx.fillRect(demo.bx,demo.by,BS,BS);
+  ctx.restore();
+}
+
+function drawGameFrame(){
+  if(!gs)return;
+  const sx=canvas.width/VW,sy=canvas.height/VH;
+  ctx.fillStyle='#000';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.save();ctx.setTransform(sx,0,0,sy,shakeX*sx,shakeY*sy);
+  ctx.fillStyle='#fff';
+  for(let y=0;y<VH;y+=40)ctx.fillRect(VW/2-5,y,10,20);
+  ctx.fillRect(gs.lp.x,gs.lp.y,PW,PH);ctx.fillRect(gs.rp.x,gs.rp.y,PW,PH);
+  ctx.fillRect(gs.ball.x,gs.ball.y,BS,BS);
+  const lx=VW/2-120+lShk*10,rx=VW/2+120+rShk*10;
+  drawScore(gs.ls,lx,90,lPop,lShk*.03);drawScore(gs.rs,rx,90,rPop,rShk*.03);
+  ctx.font='20px "Pixelify Sans",monospace';ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillStyle='rgba(255,255,255,.3)';
+  if(myRole==='left')ctx.fillText('YOU',lx,148);
+  if(myRole==='right')ctx.fillText('YOU',rx,148);
+  if(gs.phase==='countdown')drawCountdown(gs.ct,gs.cc);
+  ctx.restore();
+  if(gs.flash>.01){
+    ctx.save();ctx.fillStyle=`rgba(255,255,255,${gs.flash*.55})`;
+    ctx.fillRect(0,0,canvas.width,canvas.height);ctx.restore();
+  }
+  ctx.save();ctx.font='15px "Pixelify Sans",monospace';
+  ctx.fillStyle='rgba(255,255,255,.22)';ctx.textBaseline='bottom';
+  const hy=canvas.height-18;
+  if(myRole==='left'){ctx.textAlign='left';ctx.fillText('W / S',24,hy);}
+  else{ctx.textAlign='right';ctx.fillText('↑ / ↓',canvas.width-24,hy);}
+  ctx.restore();
+}
+
+function loop(){
+  tickAnimations();ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(inGame)drawGameFrame();else drawLobby();
+  requestAnimationFrame(loop);
+}
+showScreen('menu');loop();
+</script>
+</body>
+</html>
