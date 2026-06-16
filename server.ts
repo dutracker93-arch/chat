@@ -20,6 +20,7 @@ const TICK_MS = 1000 / 60; // 60 Hz
 //
 // Control messages use JSON text (rare, not in hot path).
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface GameState {
   leftPaddle:  { y:number };
   rightPaddle: { y:number };
@@ -35,13 +36,14 @@ interface Room {
   gameLoop:number|null;
   state:GameState;
   inputs:{ left:{up:boolean;down:boolean}; right:{up:boolean;down:boolean} };
-  pkt:Uint8Array; pktView:DataView;
+  pkt:Uint8Array; pktView:DataView; // reused broadcast buffer
 }
 
 const wsRoom = new WeakMap<WebSocket, Room|null>();
 const wsRole = new WeakMap<WebSocket, 'left'|'right'|null>();
 const rooms  = new Map<string, Room>();
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code: string;
@@ -56,6 +58,7 @@ function send(ws:WebSocket, data:unknown) {
   if(ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
 }
 
+// ─── Game state ───────────────────────────────────────────────────────────────
 function createState(): GameState {
   return {
     leftPaddle:  {y: VH/2-PH/2},
@@ -88,7 +91,7 @@ function bounceOff(s:GameState, py:number, isLeft:boolean) {
   const spd   = Math.min(Math.max(Math.hypot(s.ball.vx,s.ball.vy),BASE_SPEED)*1.06, MAX_SPEED);
   s.ball.vx   = (isLeft?1:-1)*spd*Math.cos(angle);
   s.ball.vy   = spd*Math.sin(angle);
-  s.ball.x    = isLeft ? (PW+50)+.5 : (VW-70-BS)-.5;
+  s.ball.x    = isLeft ? (PW+50)+.5 : (VW-70-BS)-.5; // left: lp.x+PW, right: rp.x-BS
   s.shakePower = Math.max(s.shakePower, 10);
 }
 
@@ -112,9 +115,11 @@ function tick(room:Room) {
     if(s.ball.y<=0)     { s.ball.y=0;     s.ball.vy*=-1; s.shakePower=Math.max(s.shakePower,6); }
     if(s.ball.y+BS>=VH) { s.ball.y=VH-BS; s.ball.vy*=-1; s.shakePower=Math.max(s.shakePower,6); }
 
+    // Left paddle: x=50, width=PW=20 → right edge at 70
     if(s.ball.x<=70 && s.ball.x+BS>=50 && s.ball.y+BS>=s.leftPaddle.y && s.ball.y<=s.leftPaddle.y+PH && s.ball.vx<0)
       bounceOff(s, s.leftPaddle.y, true);
 
+    // Right paddle: x=VW-70=1210, width=PW=20 → left edge at 1210
     if(s.ball.x+BS>=1210 && s.ball.x<=1230 && s.ball.y+BS>=s.rightPaddle.y && s.ball.y<=s.rightPaddle.y+PH && s.ball.vx>0)
       bounceOff(s, s.rightPaddle.y, false);
 
@@ -125,6 +130,7 @@ function tick(room:Room) {
   s.flashAlpha *= .9; if(s.flashAlpha<.01) s.flashAlpha=0;
 }
 
+// ─── Binary broadcast ─────────────────────────────────────────────────────────
 function broadcast(room:Room) {
   const s=room.state, v=room.pktView, p=room.pkt;
   v.setInt16(0, (s.ball.x        *4+.5)|0, false);
@@ -136,11 +142,13 @@ function broadcast(room:Room) {
   p[10] = (s.phase==='playing'?1:0) | ((s.countdownIndex&3)<<1);
   p[11] = Math.min(255, (s.shakePower*255/18+.5)|0);
   p[12] = (s.flashAlpha*255+.5)|0;
+  // send copies (slice) so the buffer can be safely reused next tick
   const copy = p.slice();
   if(room.host?.readyState  === WebSocket.OPEN) room.host.send(copy);
   if(room.guest?.readyState === WebSocket.OPEN) room.guest.send(copy);
 }
 
+// ─── Room lifecycle ───────────────────────────────────────────────────────────
 function startLoop(room:Room) {
   if(room.gameLoop) clearInterval(room.gameLoop);
   room.gameLoop = setInterval(()=>{ tick(room); broadcast(room); }, TICK_MS);
@@ -151,11 +159,13 @@ function destroyRoom(room:Room) {
   rooms.delete(room.code);
 }
 
+// ─── WebSocket handler ────────────────────────────────────────────────────────
 function handleWS(ws:WebSocket) {
   wsRoom.set(ws, null);
   wsRole.set(ws, null);
 
   ws.onmessage = (event:MessageEvent) => {
+    // ── Binary: input packet ──────────────────────────────────────────────────
     if(event.data instanceof ArrayBuffer) {
       const d = new Uint8Array(event.data);
       if(d[0]!==0xA1) return;
@@ -166,8 +176,11 @@ function handleWS(ws:WebSocket) {
       room.inputs[side].down = !!(d[1]&2);
       return;
     }
+
+    // ── Text: control message ─────────────────────────────────────────────────
     let msg:{type:string;code?:string};
     try { msg=JSON.parse(event.data); } catch { return; }
+
     switch(msg.type) {
       case 'host': {
         if(wsRoom.get(ws)) return;
@@ -211,6 +224,7 @@ function handleWS(ws:WebSocket) {
   };
 }
 
+// ─── HTTP handler ─────────────────────────────────────────────────────────────
 async function handler(req:Request): Promise<Response> {
   if(req.headers.get('upgrade')==='websocket' && new URL(req.url).pathname==='/ws') {
     const {socket,response}=Deno.upgradeWebSocket(req);
