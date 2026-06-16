@@ -1,331 +1,354 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
 <title>PONG</title>
-<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700&display=swap" rel="stylesheet"/>
 <style>
-*, *::before, *::after { box-sizing: border-box; }
-html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#000; font-family:'Pixelify Sans',monospace; color:#fff; }
-#game { display:block; position:fixed; inset:0; width:100%; height:100%; }
-#overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:20; pointer-events:none; }
-.screen { display:none; flex-direction:column; align-items:center; gap:28px; pointer-events:all; text-align:center; padding:24px; }
-.screen.active { display:flex; }
-.title { font-size:clamp(70px,13vw,130px); font-weight:700; letter-spacing:10px; text-shadow:0 0 60px rgba(255,255,255,.35); margin:0; line-height:1; }
-.label { font-size:clamp(13px,2vw,18px); letter-spacing:4px; opacity:.45; margin:0; }
-.btn { font-family:'Pixelify Sans',monospace; font-size:clamp(20px,3vw,30px); font-weight:700; letter-spacing:4px; padding:18px 56px; background:transparent; color:#fff; border:3px solid #fff; cursor:pointer; outline:none; transition:background .08s,color .08s; min-width:280px; }
-.btn:hover,.btn:focus { background:#fff; color:#000; }
-.btn-ghost { font-family:'Pixelify Sans',monospace; font-size:clamp(14px,1.8vw,19px); font-weight:400; letter-spacing:3px; padding:10px 32px; background:transparent; color:rgba(255,255,255,.4); border:2px solid rgba(255,255,255,.2); cursor:pointer; outline:none; transition:color .08s,border-color .08s; }
-.btn-ghost:hover,.btn-ghost:focus { color:#fff; border-color:rgba(255,255,255,.7); }
-.room-code { font-size:clamp(62px,11vw,112px); font-weight:700; letter-spacing:20px; padding:20px 48px 20px 68px; border:3px solid rgba(255,255,255,.25); background:rgba(255,255,255,.04); margin:0; text-shadow:0 0 30px rgba(255,255,255,.6); cursor:default; user-select:all; }
-.code-input { font-family:'Pixelify Sans',monospace; font-size:clamp(48px,8.5vw,84px); font-weight:700; letter-spacing:18px; text-align:center; background:transparent; border:none; border-bottom:3px solid #fff; color:#fff; width:min(360px,82vw); padding:8px 0 8px 18px; outline:none; text-transform:uppercase; caret-color:rgba(255,255,255,.6); }
-.code-input::placeholder { opacity:.18; letter-spacing:16px; }
-.err { font-size:16px; color:#ff5555; letter-spacing:2px; min-height:22px; margin:-12px 0; }
-.waiting { font-size:clamp(15px,2.2vw,21px); letter-spacing:3px; opacity:.7; animation:pulse 2s ease-in-out infinite; }
-@keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:.9} }
-.controls-hint { font-size:14px; letter-spacing:3px; opacity:.3; margin-top:4px; }
-.btn-stack { display:flex; flex-direction:column; align-items:center; gap:18px; }
-.title-red { text-shadow:0 0 50px rgba(255,60,60,.55); color:#fff; }
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;font-family:'Pixelify Sans',monospace;color:#fff;touch-action:none}
+#c{display:block;position:fixed;inset:0;width:100%;height:100%}
+#ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:20;pointer-events:none}
+.sc{display:none;flex-direction:column;align-items:center;gap:26px;pointer-events:all;text-align:center;padding:24px}
+.sc.on{display:flex}
+.tit{font-size:clamp(60px,13vw,130px);font-weight:700;letter-spacing:10px;text-shadow:0 0 60px rgba(255,255,255,.35);margin:0;line-height:1}
+.lbl{font-size:clamp(13px,2vw,18px);letter-spacing:4px;opacity:.45;margin:0}
+.btn{font-family:'Pixelify Sans',monospace;font-size:clamp(18px,3vw,28px);font-weight:700;letter-spacing:4px;padding:16px 52px;background:transparent;color:#fff;border:3px solid #fff;cursor:pointer;outline:none;transition:background .08s,color .08s;min-width:260px;-webkit-tap-highlight-color:transparent}
+.btn:hover,.btn:focus{background:#fff;color:#000}
+.gbtn{font-family:'Pixelify Sans',monospace;font-size:clamp(13px,1.8vw,18px);font-weight:400;letter-spacing:3px;padding:10px 30px;background:transparent;color:rgba(255,255,255,.4);border:2px solid rgba(255,255,255,.2);cursor:pointer;outline:none;transition:color .08s,border-color .08s;-webkit-tap-highlight-color:transparent}
+.gbtn:hover,.gbtn:focus{color:#fff;border-color:rgba(255,255,255,.7)}
+.code{font-size:clamp(54px,10vw,108px);font-weight:700;letter-spacing:18px;padding:18px 44px 18px 62px;border:3px solid rgba(255,255,255,.25);background:rgba(255,255,255,.04);margin:0;text-shadow:0 0 28px rgba(255,255,255,.6);user-select:all}
+.inp{font-family:'Pixelify Sans',monospace;font-size:clamp(44px,8vw,80px);font-weight:700;letter-spacing:16px;text-align:center;background:transparent;border:none;border-bottom:3px solid #fff;color:#fff;width:min(340px,80vw);padding:8px 0 8px 16px;outline:none;text-transform:uppercase;caret-color:rgba(255,255,255,.6)}
+.inp::placeholder{opacity:.18;letter-spacing:14px}
+.err{font-size:15px;color:#ff5555;letter-spacing:2px;min-height:20px;margin:-10px 0}
+.wait{font-size:clamp(14px,2vw,20px);letter-spacing:3px;opacity:.7;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:.9}}
+.hint{font-size:13px;letter-spacing:3px;opacity:.28;margin-top:2px}
+.stack{display:flex;flex-direction:column;align-items:center;gap:16px}
+.red{text-shadow:0 0 50px rgba(255,60,60,.55)}
 </style>
 </head>
 <body>
-<canvas id="game"></canvas>
-<div id="overlay">
-  <div id="screen-menu" class="screen active">
-    <h1 class="title">PONG</h1>
-    <div class="btn-stack" style="margin-top:12px">
-      <button class="btn" id="btn-host">HOST GAME</button>
-      <button class="btn" id="btn-go-join">JOIN GAME</button>
+<canvas id="c"></canvas>
+<div id="ov">
+  <div id="sm" class="sc on">
+    <h1 class="tit">PONG</h1>
+    <div class="stack" style="margin-top:10px">
+      <button class="btn" id="bH">HOST GAME</button>
+      <button class="btn" id="bJ">JOIN GAME</button>
     </div>
   </div>
-  <div id="screen-hosting" class="screen">
-    <p class="label">ROOM CODE</p>
-    <p class="room-code" id="display-code">----</p>
-    <p class="waiting">Waiting for opponent...</p>
-    <p class="controls-hint">YOU ARE LEFT PLAYER &nbsp;·&nbsp; W / S TO MOVE</p>
-    <button class="btn-ghost" id="btn-cancel">CANCEL</button>
+  <div id="sh" class="sc">
+    <p class="lbl">ROOM CODE</p>
+    <p class="code" id="dc">----</p>
+    <p class="wait">Waiting for opponent…</p>
+    <p class="hint">LEFT PLAYER &nbsp;·&nbsp; W / S</p>
+    <button class="gbtn" id="bC">CANCEL</button>
   </div>
-  <div id="screen-joining" class="screen">
-    <h1 class="title" style="font-size:clamp(42px,7vw,80px);letter-spacing:6px">JOIN GAME</h1>
-    <p class="label" style="margin-top:-8px">ENTER ROOM CODE</p>
-    <input class="code-input" id="code-input" maxlength="4" placeholder="XXXX" autocomplete="off" spellcheck="false"/>
-    <p class="err" id="join-err"></p>
-    <div class="btn-stack">
-      <button class="btn" id="btn-join">JOIN</button>
-      <button class="btn-ghost" id="btn-back">BACK</button>
+  <div id="sj" class="sc">
+    <h1 class="tit" style="font-size:clamp(38px,7vw,76px);letter-spacing:6px">JOIN GAME</h1>
+    <p class="lbl" style="margin-top:-6px">ENTER ROOM CODE</p>
+    <input class="inp" id="ci" maxlength="4" placeholder="XXXX" autocomplete="off" spellcheck="false"/>
+    <p class="err" id="je"></p>
+    <div class="stack">
+      <button class="btn" id="bJo">JOIN</button>
+      <button class="gbtn" id="bB">BACK</button>
     </div>
-    <p class="controls-hint">YOU ARE RIGHT PLAYER &nbsp;·&nbsp; ↑ / ↓ TO MOVE</p>
+    <p class="hint">RIGHT PLAYER &nbsp;·&nbsp; ↑ / ↓</p>
   </div>
-  <div id="screen-disconnected" class="screen">
-    <h1 class="title title-red" style="font-size:clamp(38px,6.5vw,76px);line-height:1.2">OPPONENT<br>LEFT</h1>
-    <button class="btn" id="btn-menu">MAIN MENU</button>
+  <div id="sd" class="sc">
+    <h1 class="tit red" style="font-size:clamp(34px,6vw,72px);line-height:1.2">OPPONENT<br>LEFT</h1>
+    <button class="btn" id="bM">MAIN MENU</button>
   </div>
 </div>
 <script>
-// ── Constants (must match server) ─────────────────────────────────────────────
-const VW=1280, VH=720, PW=20, PH=140, BS=18, PS=10;
+'use strict';
+const VW=1280,VH=720,PW=20,PH=140,BS=18,PS=10;
+const LP_X=50, RP_X=VW-70;
+const CD_TEXTS  = ['3','2','1','GO'];
+const CD_COLORS = ['lime','yellow','red','red'];
 
-// ── Lag-reduction tunables ────────────────────────────────────────────────────
-const INTERP_DELAY   = 100;  // ms: how far behind we render (smooths opponent movement)
-const RECONCILE_SNAP = 80;   // px: hard-snap own paddle if server disagrees by this much
-const RECONCILE_LERP = 0.25; // fraction: soft correction per frame for smaller drifts
+const INTERP_MS      = 100;
+const RECONCILE_SNAP = 80;
+const RECONCILE_LERP = 0.25;
 
-// ── Canvas ────────────────────────────────────────────────────────────────────
-const canvas = document.getElementById('game');
+const keys  = new Set();
+const touch = {up:false, down:false};
+const isMob = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
+const inputBuf  = new Uint8Array(2);
+inputBuf[0] = 0xA1;
+let sentFlags = -1;
+
+const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
-function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+
+let dashCanvas = null;
+
+function buildDashCanvas() {
+  dashCanvas = document.createElement('canvas');
+  dashCanvas.width  = canvas.width;
+  dashCanvas.height = canvas.height;
+  const dc  = dashCanvas.getContext('2d');
+  const sx  = canvas.width  / VW;
+  const sy  = canvas.height / VH;
+  dc.fillStyle = '#fff';
+  for(let y=0;y<VH;y+=40) {
+    dc.fillRect((VW/2-5)*sx, y*sy, 10*sx, 20*sy);
+  }
+}
+
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  buildDashCanvas();
+}
 window.addEventListener('resize', resize); resize();
 
-// ── Game state ────────────────────────────────────────────────────────────────
-let ws=null, myRole=null, inGame=false, gs=null;
+let ws=null, myRole=null, inGame=false;
+let gs = null;
 
-// Interpolation: ring buffer of {t, s} — timestamped server snapshots
-const stateBuf = [];
-const BUF_MAX  = 64;
+const BUF = 64;
+const ibT  = new Float64Array(BUF);
+const ibBx = new Float32Array(BUF);
+const ibBy = new Float32Array(BUF);
+const ibLy = new Float32Array(BUF);
+const ibRy = new Float32Array(BUF);
+let ibHead = 0, ibSize = 0;
 
-// Client-side prediction: local copy of own paddle Y
-let localPaddleY = VH/2 - PH/2;
-
-// Animation state
-let cdScale=1, cdRot=0, cdAlpha=1, lastCi=-1;
-let lPop=1, rPop=1, lShk=0, rShk=0, lastLS=0, lastRS=0;
-let shakeX=0, shakeY=0;
-
-// Demo (lobby background)
-const demo = {bx:VW/2, by:VH/2, bvx:5.2, bvy:3.8, ly:VH/2-PH/2, ry:VH/2-PH/2};
-
-// Input
-const keys = {};
-let sentUp=false, sentDn=false;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function lerp(a, b, t){ return a + (b-a)*t; }
-
-// ── Input handling ────────────────────────────────────────────────────────────
-document.addEventListener('keydown', e=>{ keys[e.key.toLowerCase()]=true;  sendInput(); });
-document.addEventListener('keyup',   e=>{ keys[e.key.toLowerCase()]=false; sendInput(); });
-
-function sendInput(){
-  if(!ws || ws.readyState!==1 || !inGame) return;
-  const up   = !!(myRole==='left' ? keys['w']       : keys['arrowup']);
-  const down = !!(myRole==='left' ? keys['s']       : keys['arrowdown']);
-  if(up!==sentUp || down!==sentDn){
-    ws.send(JSON.stringify({type:'input', up, down}));
-    sentUp=up; sentDn=down;
-  }
+function ibPush(t,bx,by,ly,ry) {
+  ibT[ibHead]=t; ibBx[ibHead]=bx; ibBy[ibHead]=by;
+  ibLy[ibHead]=ly; ibRy[ibHead]=ry;
+  ibHead=(ibHead+1)%BUF;
+  if(ibSize<BUF) ibSize++;
 }
 
-// ── Client-side prediction ────────────────────────────────────────────────────
-function stepLocalPaddle(){
+function ibGet(idx) {
+  const i=(ibHead - ibSize + idx + BUF*2)%BUF;
+  return {t:ibT[i],bx:ibBx[i],by:ibBy[i],ly:ibLy[i],ry:ibRy[i]};
+}
+
+let localY = VH/2 - PH/2;
+
+function stepLocal() {
   if(!inGame || !gs) return;
-  const up   = myRole==='left' ? keys['w'] : keys['arrowup'];
-  const down = myRole==='left' ? keys['s'] : keys['arrowdown'];
-  if(up)   localPaddleY -= PS;
-  if(down) localPaddleY += PS;
-  localPaddleY = Math.max(0, Math.min(VH-PH, localPaddleY));
+  const up   = keys.has(myRole==='left'?'w':'arrowup')   || touch.up;
+  const down = keys.has(myRole==='left'?'s':'arrowdown') || touch.down;
+  if(up)   localY -= PS;
+  if(down) localY += PS;
+  localY = localY<0?0:localY>VH-PH?VH-PH:localY;
 }
 
-function reconcile(serverY){
-  const diff = serverY - localPaddleY;
-  if(Math.abs(diff) > RECONCILE_SNAP){
-    localPaddleY = serverY;
-  } else {
-    localPaddleY += diff * RECONCILE_LERP;
+function reconcile(serverY) {
+  const d = serverY - localY;
+  if(d>RECONCILE_SNAP||d<-RECONCILE_SNAP) localY=serverY;
+  else localY += d * RECONCILE_LERP;
+}
+
+const IPOS = {bx:VW/2,by:VH/2,ly:VH/2-PH/2,ry:VH/2-PH/2};
+
+function calcInterp() {
+  if(ibSize===0) return;
+  if(ibSize===1) {
+    const e=ibGet(0); IPOS.bx=e.bx;IPOS.by=e.by;IPOS.ly=e.ly;IPOS.ry=e.ry; return;
   }
-}
-
-// ── Entity interpolation ──────────────────────────────────────────────────────
-function getInterp(){
-  if(stateBuf.length === 0) return null;
-  if(stateBuf.length === 1) return {lp:stateBuf[0].s.lp, rp:stateBuf[0].s.rp, ball:stateBuf[0].s.ball};
-
-  const renderTime = Date.now() - INTERP_DELAY;
-
-  let lo = 0;
-  for(let i=stateBuf.length-1; i>=0; i--){
-    if(stateBuf[i].t <= renderTime){ lo=i; break; }
+  const rt = Date.now() - INTERP_MS;
+  let lo=0, hi=ibSize-1;
+  while(lo<hi-1) {
+    const mid=(lo+hi)>>1;
+    if(ibGet(mid).t<=rt) lo=mid; else hi=mid;
   }
-  const hi = Math.min(lo+1, stateBuf.length-1);
-  if(lo === hi) return {lp:stateBuf[lo].s.lp, rp:stateBuf[lo].s.rp, ball:stateBuf[lo].s.ball};
-
-  const a = stateBuf[lo], b = stateBuf[hi];
-  const t = Math.max(0, Math.min(1, (renderTime - a.t) / (b.t - a.t)));
-  return {
-    lp:   { x: lerp(a.s.lp.x,   b.s.lp.x,   t), y: lerp(a.s.lp.y,   b.s.lp.y,   t) },
-    rp:   { x: lerp(a.s.rp.x,   b.s.rp.x,   t), y: lerp(a.s.rp.y,   b.s.rp.y,   t) },
-    ball: { x: lerp(a.s.ball.x,  b.s.ball.x, t), y: lerp(a.s.ball.y,  b.s.ball.y, t) },
-  };
+  const a=ibGet(lo), b=ibGet(hi);
+  if(b.t===a.t){ IPOS.bx=b.bx;IPOS.by=b.by;IPOS.ly=b.ly;IPOS.ry=b.ry; return; }
+  const t=Math.max(0,Math.min(1,(rt-a.t)/(b.t-a.t)));
+  IPOS.bx=a.bx+(b.bx-a.bx)*t; IPOS.by=a.by+(b.by-a.by)*t;
+  IPOS.ly=a.ly+(b.ly-a.ly)*t; IPOS.ry=a.ry+(b.ry-a.ry)*t;
 }
 
-// ── Screen management ─────────────────────────────────────────────────────────
-function showScreen(id){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  const ov = document.getElementById('overlay');
-  if(id){ document.getElementById('screen-'+id).classList.add('active'); ov.style.pointerEvents=''; inGame=false; }
+function sendInput() {
+  if(!ws||ws.readyState!==1||!inGame) return;
+  const up   = keys.has(myRole==='left'?'w':'arrowup')   || touch.up;
+  const down = keys.has(myRole==='left'?'s':'arrowdown') || touch.down;
+  const flags = (up?1:0) | (down?2:0);
+  if(flags === sentFlags) return;
+  sentFlags = flags;
+  inputBuf[1] = flags;
+  ws.send(inputBuf.buffer.slice(0,2));
+}
+
+const DS = {bx:0,by:0,ly:0,ry:0,ls:0,rs:0,playing:false,ci:0,shake:0,flash:0};
+let lastCi=-1, lastLS=0, lastRS=0;
+
+let cdScale=1,cdRot=0,cdAlpha=1;
+let lPop=1,rPop=1,lShk=0,rShk=0;
+
+function decodeState(buf) {
+  const v = new DataView(buf);
+  const p = new Uint8Array(buf);
+  DS.bx    = v.getInt16(0,false)/4;
+  DS.by    = v.getInt16(2,false)/4;
+  DS.ly    = v.getInt16(4,false)/4;
+  DS.ry    = v.getInt16(6,false)/4;
+  DS.ls    = p[8];
+  DS.rs    = p[9];
+  DS.playing = !!(p[10]&1);
+  DS.ci    = (p[10]>>1)&3;
+  DS.shake = p[11]/255*18;
+  DS.flash = p[12]/255;
+}
+
+function onState(buf) {
+  decodeState(buf);
+  ibPush(Date.now(), DS.bx, DS.by, DS.ly, DS.ry);
+  gs = DS;
+  if(DS.ci!==lastCi){ cdScale=2.5;cdRot=(Math.random()-.5)*.25;cdAlpha=0;lastCi=DS.ci; }
+  if(DS.ls>lastLS)  { lPop=2.2;lShk= .35;lastLS=DS.ls; }
+  if(DS.rs>lastRS)  { rPop=2.2;rShk=-.35;lastRS=DS.rs; }
+  reconcile(myRole==='left'?DS.ly:DS.ry);
+}
+
+function show(id) {
+  document.querySelectorAll('.sc').forEach(s=>s.classList.remove('on'));
+  const ov=document.getElementById('ov');
+  if(id){ document.getElementById(id).classList.add('on'); ov.style.pointerEvents=''; inGame=false; }
   else  { ov.style.pointerEvents='none'; inGame=true; }
 }
 
-// ── WebSocket ─────────────────────────────────────────────────────────────────
-function connect(onOpen){
-  if(ws && ws.readyState<2) ws.close();
-  const proto = location.protocol==='https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${proto}//${location.host}/ws`);
-  ws.onopen   = onOpen;
-  ws.onmessage= ({data})=>{ let m; try{m=JSON.parse(data);}catch{return;} handleMsg(m); };
-  ws.onclose  = ()=>{ if(inGame){ inGame=false; showScreen('disconnected'); } ws=null; };
-  ws.onerror  = ()=>{};
+function connect(cb) {
+  if(ws&&ws.readyState<2) ws.close();
+  const proto=location.protocol==='https:'?'wss:':'ws:';
+  ws=new WebSocket(`${proto}//${location.host}/ws`);
+  ws.binaryType='arraybuffer';
+  ws.onopen=cb;
+  ws.onmessage=({data})=>{
+    if(data instanceof ArrayBuffer){ onState(data); return; }
+    let m; try{m=JSON.parse(data);}catch{return;}
+    switch(m.type){
+      case 'hosted':         document.getElementById('dc').textContent=m.code; show('sh'); break;
+      case 'opponentJoined': beginGame('left');  break;
+      case 'joined':         beginGame('right'); break;
+      case 'opponentLeft':   inGame=false; show('sd'); break;
+      case 'error':          document.getElementById('je').textContent=m.msg||'Error'; break;
+    }
+  };
+  ws.onclose=()=>{ if(inGame){inGame=false;show('sd');} ws=null; };
+  ws.onerror=()=>{};
 }
 
-function handleMsg(msg){
-  switch(msg.type){
-    case 'hosted':         document.getElementById('display-code').textContent=msg.code; showScreen('hosting'); break;
-    case 'opponentJoined': beginGame('left');  break;
-    case 'joined':         beginGame('right'); break;
-    case 'state':          processState(msg);  break;
-    case 'opponentLeft':   inGame=false; showScreen('disconnected'); break;
-    case 'error':          document.getElementById('join-err').textContent=msg.msg||'Something went wrong.'; break;
-  }
+function beginGame(role) {
+  myRole=role; gs=null; sentFlags=-1;
+  cdScale=2.5;cdRot=0;cdAlpha=0;lastCi=-1;
+  lPop=1;rPop=1;lShk=0;rShk=0;lastLS=0;lastRS=0;
+  ibHead=0;ibSize=0; localY=VH/2-PH/2;
+  touch.up=false;touch.down=false;
+  show(null);
 }
 
-function beginGame(role){
-  myRole=role; gs=null; sentUp=false; sentDn=false;
-  cdScale=2.5; cdRot=0; cdAlpha=0; lastCi=-1;
-  lPop=1; rPop=1; lShk=0; rShk=0; lastLS=0; lastRS=0;
-  stateBuf.length=0;
-  localPaddleY = VH/2 - PH/2;
-  showScreen(null);
-}
-
-function processState(msg){
-  if(msg.ci !== lastCi){ cdScale=2.5; cdRot=(Math.random()-.5)*.25; cdAlpha=0; lastCi=msg.ci; }
-  if(msg.ls  > lastLS) { lPop=2.2; lShk= .35; lastLS=msg.ls; }
-  if(msg.rs  > lastRS) { rPop=2.2; rShk=-.35; lastRS=msg.rs; }
-
-  stateBuf.push({t: Date.now(), s: msg});
-  if(stateBuf.length > BUF_MAX) stateBuf.shift();
-
-  gs = msg;
-
-  reconcile(myRole==='left' ? msg.lp.y : msg.rp.y);
-}
-
-// ── UI event handlers ─────────────────────────────────────────────────────────
-document.getElementById('btn-host').onclick    = ()=>connect(()=>ws.send(JSON.stringify({type:'host'})));
-document.getElementById('btn-go-join').onclick = ()=>{
-  document.getElementById('join-err').textContent='';
-  document.getElementById('code-input').value='';
-  showScreen('joining');
-  setTimeout(()=>document.getElementById('code-input').focus(), 60);
+document.getElementById('bH').onclick = ()=>connect(()=>ws.send(JSON.stringify({type:'host'})));
+document.getElementById('bJ').onclick = ()=>{
+  document.getElementById('je').textContent='';
+  document.getElementById('ci').value='';
+  show('sj');
+  setTimeout(()=>document.getElementById('ci').focus(),60);
 };
-document.getElementById('btn-join').onclick = doJoin;
-document.getElementById('code-input').addEventListener('keydown', e=>{ if(e.key==='Enter') doJoin(); });
+document.getElementById('bJo').onclick = doJoin;
+document.getElementById('ci').addEventListener('keydown',e=>{ if(e.key==='Enter') doJoin(); });
 function doJoin(){
-  const code = document.getElementById('code-input').value.toUpperCase().trim();
-  document.getElementById('join-err').textContent='';
-  if(code.length!==4){ document.getElementById('join-err').textContent='Code must be 4 characters.'; return; }
-  connect(()=>ws.send(JSON.stringify({type:'join', code})));
+  const code=document.getElementById('ci').value.toUpperCase().trim();
+  document.getElementById('je').textContent='';
+  if(code.length!==4){document.getElementById('je').textContent='Code must be 4 characters.';return;}
+  connect(()=>ws.send(JSON.stringify({type:'join',code})));
 }
-document.getElementById('btn-back').onclick   = ()=>{ showScreen('menu');  if(ws){ws.close();ws=null;} };
-document.getElementById('btn-cancel').onclick = ()=>{ showScreen('menu');  if(ws){ws.close();ws=null;} };
-document.getElementById('btn-menu').onclick   = ()=>{ showScreen('menu');  gs=null; if(ws){ws.close();ws=null;} };
+document.getElementById('bB').onclick=()=>{ show('sm'); if(ws){ws.close();ws=null;} };
+document.getElementById('bC').onclick=()=>{ show('sm'); if(ws){ws.close();ws=null;} };
+document.getElementById('bM').onclick=()=>{ show('sm'); gs=null; if(ws){ws.close();ws=null;} };
 
-// ── Animation helpers ─────────────────────────────────────────────────────────
-function tickAnimations(){
-  cdScale += (1-cdScale)*.12; cdRot*=.9; cdAlpha += (1-cdAlpha)*.12;
-  lPop   += (1-lPop)*.14;    rPop  += (1-rPop)*.14;
-  lShk   *= .85;              rShk  *= .85;
-  if(gs){ shakeX=(Math.random()-.5)*gs.shake; shakeY=(Math.random()-.5)*gs.shake; }
-  if(!inGame){
-    demo.bx+=demo.bvx; demo.by+=demo.bvy;
-    if(demo.by<0)         { demo.by=0;        demo.bvy*=-1; }
-    if(demo.by+BS>VH)     { demo.by=VH-BS;    demo.bvy*=-1; }
-    if(demo.bx<70)        { demo.bx=70;       demo.bvx=Math.abs(demo.bvx); }
-    if(demo.bx+BS>VW-70)  { demo.bx=VW-70-BS; demo.bvx=-Math.abs(demo.bvx); }
-    const t=demo.by+BS/2-PH/2;
-    demo.ly+=(t-demo.ly)*.045; demo.ry+=(t-demo.ry)*.045;
-  }
+document.addEventListener('keydown',e=>{ keys.add(e.key.toLowerCase()); sendInput(); });
+document.addEventListener('keyup',  e=>{ keys.delete(e.key.toLowerCase()); sendInput(); });
+
+const activeTouches = new Map();
+
+function processTouches() {
+  let up=false, down=false;
+  activeTouches.forEach(y=>{ if(y<window.innerHeight/2) up=true; else down=true; });
+  if(touch.up!==up||touch.down!==down){ touch.up=up; touch.down=down; sendInput(); }
 }
 
-// ── Draw ──────────────────────────────────────────────────────────────────────
-function drawScore(score,x,y,scale,rot){
+function onTouchStart(e){
+  e.preventDefault();
+  for(const t of e.changedTouches) activeTouches.set(t.identifier,t.clientY);
+  processTouches();
+}
+function onTouchMove(e){
+  e.preventDefault();
+  for(const t of e.changedTouches) if(activeTouches.has(t.identifier)) activeTouches.set(t.identifier,t.clientY);
+  processTouches();
+}
+function onTouchEnd(e){
+  e.preventDefault();
+  for(const t of e.changedTouches) activeTouches.delete(t.identifier);
+  processTouches();
+}
+canvas.addEventListener('touchstart', onTouchStart, {passive:false});
+canvas.addEventListener('touchmove',  onTouchMove,  {passive:false});
+canvas.addEventListener('touchend',   onTouchEnd,   {passive:false});
+canvas.addEventListener('touchcancel',onTouchEnd,   {passive:false});
+
+const demo={bx:VW/2,by:VH/2,bvx:5.2,bvy:3.8,ly:VH/2-PH/2,ry:VH/2-PH/2};
+
+function tickDemo() {
+  demo.bx+=demo.bvx; demo.by+=demo.bvy;
+  if(demo.by<0)         {demo.by=0;        demo.bvy*=-1;}
+  if(demo.by+BS>VH)     {demo.by=VH-BS;    demo.bvy*=-1;}
+  if(demo.bx<70)        {demo.bx=70;       demo.bvx=Math.abs(demo.bvx);}
+  if(demo.bx+BS>VW-70)  {demo.bx=VW-70-BS; demo.bvx=-Math.abs(demo.bvx);}
+  const ty=demo.by+BS/2-PH/2;
+  demo.ly+=(ty-demo.ly)*.045; demo.ry+=(ty-demo.ry)*.045;
+}
+
+function drawScore(score,x,y,scale,rot) {
   ctx.save(); ctx.translate(x,y); ctx.rotate(rot); ctx.scale(scale,scale);
-  ctx.font='90px "Pixelify Sans",monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.lineWidth=10; ctx.strokeStyle='#000'; ctx.strokeText(score,0,0);
   ctx.fillStyle='#fff'; ctx.fillText(score,0,0); ctx.restore();
 }
 
-function drawCountdown(text,color){
+function drawCountdown(text,color) {
   ctx.save(); ctx.translate(VW/2,VH/2-20); ctx.rotate(cdRot); ctx.scale(cdScale,cdScale);
-  ctx.globalAlpha=cdAlpha; ctx.font='140px "Pixelify Sans",monospace';
+  ctx.globalAlpha=cdAlpha;
+  ctx.font='140px "Pixelify Sans",monospace';
   ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.lineWidth=16;
   ctx.strokeStyle='#000'; ctx.strokeText(text,0,0);
   ctx.shadowBlur=40; ctx.shadowColor=color; ctx.fillStyle=color; ctx.fillText(text,0,0);
   ctx.restore();
 }
 
-function drawLobby(){
-  const sx=canvas.width/VW, sy=canvas.height/VH;
-  ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.save(); ctx.setTransform(sx,0,0,sy,0,0);
-  ctx.fillStyle='rgba(255,255,255,.07)';
-  for(let y=0;y<VH;y+=40) ctx.fillRect(VW/2-5,y,10,20);
+function drawLobby() {
+  const cw=canvas.width, ch=canvas.height;
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,cw,ch);
+  if(dashCanvas) ctx.drawImage(dashCanvas,0,0);
+  const sx=cw/VW, sy=ch/VH;
   ctx.fillStyle='rgba(255,255,255,.12)';
-  ctx.fillRect(50,demo.ly,PW,PH); ctx.fillRect(VW-70,demo.ry,PW,PH);
-  ctx.fillStyle='rgba(255,255,255,.18)'; ctx.fillRect(demo.bx,demo.by,BS,BS);
-  ctx.restore();
+  ctx.fillRect(LP_X*sx, demo.ly*sy, PW*sx, PH*sy);
+  ctx.fillRect(RP_X*sx, demo.ry*sy, PW*sx, PH*sy);
+  ctx.fillStyle='rgba(255,255,255,.18)';
+  ctx.fillRect(demo.bx*sx, demo.by*sy, BS*sx, BS*sy);
 }
 
-function drawGameFrame(){
+function drawGame() {
   if(!gs) return;
-
-  const interp = getInterp() || {lp:gs.lp, rp:gs.rp, ball:gs.ball};
-
-  // Client-side prediction: override own paddle with locally-predicted Y
-  const lpY = myRole==='left'  ? localPaddleY : interp.lp.y;
-  const rpY = myRole==='right' ? localPaddleY : interp.rp.y;
-
-  const sx=canvas.width/VW, sy=canvas.height/VH;
-  ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.save(); ctx.setTransform(sx,0,0,sy, shakeX*sx, shakeY*sy);
+  calcInterp();
+  const cw=canvas.width, ch=canvas.height, sx=cw/VW, sy=ch/VH;
+  const sk=gs.shake;
+  const ox=sk?(Math.random()-.5)*sk*sx:0;
+  const oy=sk?(Math.random()-.5)*sk*sy:0;
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,cw,ch);
+  ctx.save(); ctx.translate(ox,oy);
+  if(dashCanvas) ctx.drawImage(dashCanvas,0,0);
+  const lpY = (myRole==='left'  ? localY : IPOS.ly) * sy;
+  const rpY = (myRole==='right' ? localY : IPOS.ry) * sy;
   ctx.fillStyle='#fff';
-  for(let y=0;y<VH;y+=40) ctx.fillRect(VW/2-5,y,10,20);
-  ctx.fillRect(interp.lp.x, lpY, PW, PH);
-  ctx.fillRect(interp.rp.x, rpY, PW, PH);
-  ctx.fillRect(interp.ball.x, interp.ball.y, BS, BS);
-
-  const lx=VW/2-120+lShk*10, rx=VW/2+120+rShk*10;
-  drawScore(gs.ls, lx, 90, lPop, lShk*.03);
-  drawScore(gs.rs, rx, 90, rPop, rShk*.03);
-  ctx.font='20px "Pixelify Sans",monospace'; ctx.textAlign='center'; ctx.textBaseline='top';
-  ctx.fillStyle='rgba(255,255,255,.3)';
-  if(myRole==='left')  ctx.fillText('YOU',lx,148);
-  if(myRole==='right') ctx.fillText('YOU',rx,148);
-  if(gs.phase==='countdown') drawCountdown(gs.ct, gs.cc);
-  ctx.restore();
-
-  if(gs.flash>.01){
-    ctx.save(); ctx.fillStyle=`rgba(255,255,255,${gs.flash*.55})`;
-    ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
-  }
-  ctx.save(); ctx.font='15px "Pixelify Sans",monospace';
-  ctx.fillStyle='rgba(255,255,255,.22)'; ctx.textBaseline='bottom';
-  const hy=canvas.height-18;
-  if(myRole==='left') { ctx.textAlign='left';  ctx.fillText('W / S',24,hy); }
-  else                { ctx.textAlign='right'; ctx.fillText('↑ / ↓',canvas.width-24,hy); }
-  ctx.restore();
-}
-
-// ── Main loop ─────────────────────────────────────────────────────────────────
-function loop(){
-  stepLocalPaddle();
-  tickAnimations();
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  if(inGame) drawGameFrame(); else drawLobby();
-  requestAnimationFrame(loop);
-}
-showScreen('menu');
-loop();
-</script>
-</body>
-</html>
+  ctx.fillRect(LP_X*sx, lpY, PW*sx, PH*sy);
+  ctx.fillRect(RP_X*sx, rpY, PW*sx, PH*sy);
+  ctx.fillRect(IPOS.bx*sx, IPOS.by*sy, BS*sx, BS*sy);
+  const lx=(VW/2-120+lShk*
